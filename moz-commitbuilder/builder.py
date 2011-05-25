@@ -69,14 +69,13 @@ def getTrunk():
   else:
     print "Trunk not found."
     os.system("rm -rf mozbuild-trunk")
-    print "Removed old mozbuild-trunk directory. Downloading from mozilla-central..."
+    print "Removed old mozbuild-trunk directory. Downloading a fresh repo from mozilla-central..."
     downloadTrunk = os.popen("hg clone http://hg.mozilla.org/mozilla-central mozbuild-trunk")
     #output = downloadTrunk.read()
 
+#NOTE TO SELF: This needs to recurse. Also, parsing. Stupid.
 def findCommit(good, bad):
-  #This func is gonna be recursive
-
-  #os.system("cd mozbuild-trunk && hg bisect --reset")
+  os.system("cd mozbuild-trunk && hg bisect --reset")
 
   #Switch to bad commit here, then mark it as bad
   #os.system("cd mozbuild-trunk && hg bisect --bad")
@@ -109,7 +108,7 @@ def validate(good, bad):
       4) If good is right after bad, return the bad
       5) Correct behavior: call hg bisect, build the commit, and start the process!
   """
-  
+
   return True  #stubbed
 
 

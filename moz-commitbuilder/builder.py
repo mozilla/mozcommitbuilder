@@ -35,31 +35,28 @@
 # ***** END LICENSE BLOCK *****
 
 '''
-  @title builder.py
-  @desc  Gets mozilla-central repo: interactively bisects commits, builds and runs them
+  Known Issues
+  -------------
+  1. Firefox doesn't close correctly -- potentially decide to run it via a system call?
+  2. Running the build makes an assumption that ~/.mozconfig is set correctly.
 
-  Step 1. Get the trunk
-  Step 2. Decide which revision to build via hg bisect
-  Step 3. Build it
-  Step 4. Launch it
-  Step 5. Upon close, prompt to see if it was good or bad
-  Step 6. Recurse through step 2-5 until it returns "The first bad revision is..." -- print that revision and quit.
+        TODO: See if these args can be passed in some other way?
 
-  Assumption: ~/.mozconfig is set correctly. TODO: See if these args can be passed in some other way?
-  Improvement: Make the repo URL a variable that can be set through flags
-  Improvement: Build can handle OSX, Windows, or Linux
-  Improvement: Stop using os.popen and start using subprocess
-  Improvement: Use argparse instead of optionparser
-  Improvement: Back up .mozconfig, pipe a new one into place, then clean up when done?
+  2.
 
 '''
 
-from optparse import OptionParser #note: deprecated in Python27, use argparse
-import os, sys, subprocess, string, re, tempfile
+from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
+import os, sys, subprocess, string, re, tempfile, shlex
 from types import *
 
+#Setting Variables
 showCapturedCommands = False
+showMakeData = 0
 progVersion="Mozilla Commitbuilder 0.1"
+repoURL="http://hg.mozilla.org/mozilla-central"
+makeCommand=["make","-f","client.mk","build"]
+alternateMake = False
 
 #Setup a cache to store our repo
 shellCacheDir = os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache")
@@ -80,7 +77,7 @@ def getTrunk():
     makeClean = subprocess.call(["rm","-rf", os.path.join(shellCacheDir,"mozbuild-trunk")])
     print "Removed old mozbuild-trunk directory. Downloading a fresh repo from mozilla-central..."
     #downloadTrunk = os.popen("hg clone http://hg.mozilla.org/mozilla-central mozbuild-trunk")
-    downloadTrunk = subprocess.call(["hg","clone","http://hg.mozilla.org/mozilla-central", os.path.join(shellCacheDir,"mozbuild-trunk")])
+    downloadTrunk = subprocess.call(["hg", "clone", repoURL, "mozbuild-trunk"], cwd=shellCacheDir)
 
 #This function was copied directly from Jesse Ruderman's autoBisect
 #Resolves names like "tip" and "52707" to the long stable hg hash ids
@@ -88,49 +85,60 @@ def hgId(rev):
     return captureStdout(hgPrefix + ["id", "-i", "-r", rev])
 
 #Build the current repo
-def build(revision):
-  os.system("cd mozbuild-trunk && hg up "+revision)
-  print "Changed to revision "+revision+"."
+def build():
   print "Building..."
   #TODO: Use a specific mozconfig
   #Possibly add a flag that lets us toggle what config we're using?
   #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
-
-  #os.system("cd mozbuild-trunk && make -f client.mk build")
-  subprocess.call(["rm","-rf", os.path.join(shellCacheDir,"mozbuild-trunk")])
+  makeData = captureStdout(makeCommand, ignoreStderr=True, currWorkingDir=os.path.join(shellCacheDir,"mozbuild-trunk"))
+  if showMakeData == 1:
+    print makeData
+  print "Build complete!"
 
 def bisect(good,bad):
   if good and bad and validate(good, bad): #valid commit numbers, do the bisection!
-      getTrunk()
-      findCommit(good,bad)
+      #getTrunk() if we use this module as a library module this function call is necessary
+
+      #Reset hg's bisect tool
+      subprocess.call(hgPrefix+["bisect","--reset"])
+
+      subprocess.call(hgPrefix+["up",bad])
+      subprocess.call(hgPrefix+["bisect","--bad"])
+
+      subprocess.call(hgPrefix+["bisect","--good",good])
+
+      bisectRecurse()
   else:
     print "Invalid values. Please check your changeset revision numbers."
 
 #NOTE TO SELF: This needs to recurse. Also, parsing. Stupid.
-def findCommit(good, bad):
-  #os.system("cd mozbuild-trunk && hg bisect --reset")
-  subprocess.call(hgPrefix+["bisect","--reset"])
-
-  #Switch to bad commit here, then mark it as bad
-  #hg bisect --bad"
-
-  #Bisect with the commit number of the good below:
-  #hg bisect --good commitNumberOfGood
-
-  #Working set updated to something in between. Test it!!!
-  build(good) #STUB just build the good one to test that building actually works -- the real build function doesn't need a param because bisect automatically updates to the middle commit
-  print "Build complete!"
+def bisectRecurse():
+  build() #build current revision
 
   #Run the build and open a prompt ("Is this revision good? (Y/N)")
-  args = "cd mozbuild-trunk/obj-ff-dbg/dist/bin && ./firefox"
-  proc = subprocess.Popen(args, shell=True)
-  proc.wait()
+  #args = "cd mozbuild-trunk/obj-ff-dbg/dist/bin && ./firefox"
+  proc = subprocess.Popen("./firefox", cwd=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin"))
   verdict = ""
   while verdict != 'good' and verdict != 'bad' and verdict != 'b' and verdict != 'g':
     verdict = raw_input("Was this commit good or bad? (type 'good' or 'bad' and press Enter): ")
   #do hg bisect --good or --bad depending on whether it's good or bad
+  retval = 10;
+  if verdict == 'good':
+    retval = captureStdout(hgPrefix+["bisect","--good"])
+  else:
+    retval = captureStdout(hgPrefix+["bisect","--bad"])
 
-  #when we find a bad revision after a good revision, hg will tell us and stop
+  print str(retval)
+
+  #This is totally a hack to avoid parsing
+  #if retval starts with "Testing" then it needs to keep going
+  #if retval starts with "The" then we can quit
+
+  if retval[1] == 'h':
+    quit()
+
+  print "\n"
+  bisectRecurse()
 
 #Method by Jesse Ruderman -- captures command line output into python string
 def captureStdout(cmd, ignoreStderr=False, combineStderr=False, ignoreExitCode=False, currWorkingDir=os.getcwdu()):
@@ -174,7 +182,7 @@ def validate(good, bad):
   if (good == bad):
     return False
   return True
-  '''
+  '''                                              "
     TODO Validations:
       1) If the commit numbers aren't real commits, abort
       2) If good is newer than bad, quit
@@ -184,7 +192,7 @@ def validate(good, bad):
 
 #Main method
 if __name__ == "__main__":
-  usage = "usage: %prog [options] repo"
+  usage = "usage: %prog [options] [optional: repository URL]"
   parser = OptionParser(usage=usage,version=progVersion)
   parser.add_option("-g", "--good", dest="good",
                     help="Last known good revision",
@@ -192,14 +200,37 @@ if __name__ == "__main__":
   parser.add_option("-b", "--bad", dest="bad",
                     help="Broken commit revision",
                     metavar="changeset#")
+
+  group = OptionGroup(parser, "Unstable Options",
+                    "Caution: use these options at your own risk.  "
+                    "They aren't recommended.")
+
+  group.add_option("-r", "--repo", dest="repoURL",
+                    help="alternative mercurial repo to bisect",
+                    metavar="valid repository url")
+  group.add_option("-m", "--altmake", dest="alternateMake",
+                    help="alternative make command for building",
+                    metavar="make command, in quotes")
+  parser.add_option_group(group)
   (options, args) = parser.parse_args()
 
   # Run it
   if not options.good or not options.bad:
     print "Use -h flag for available options"
   else:
+    getTrunk()
     good = hgId(options.good)
     bad = hgId(options.bad)
+    newrepoURL = options.repoURL
+
+    if newrepoURL:
+      print "Flag: using "+newrepoURL+" instead of Mozilla Central as our repository."
+      repoURL = newrepoURL
+
+    if alternateMake:
+      print "Flag: using custom make command to build the repo."
+      makeCommand = shlex.split(alternateMake)
+
     print "good is "+good+" and bad is "+bad
     print "Begin interactive commit bisect!"
     bisect(good,bad)

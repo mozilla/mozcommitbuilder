@@ -6,7 +6,7 @@ Command-line tool for regression finding in Firefox. Uses mozilla-central reposi
 ##Dependencies
 You must have this line in mozconfig right now:  
 
-  mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg
+  `mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg`
 
 The reason for this is that obj-ff-dbg is the folder we go into to launch compiled firefoxes  
 TODO: Export a custom mozconfig so this is no longer necessary
@@ -14,4 +14,4 @@ TODO: Export a custom mozconfig so this is no longer necessary
 ##Usage
 Example:
 
-  ./builder.py --good=70170 --bad=70172
+  `./builder.py --good=70170 --bad=70172`

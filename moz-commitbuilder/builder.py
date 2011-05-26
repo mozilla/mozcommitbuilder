@@ -41,9 +41,6 @@
   2. Running the build makes an assumption that ~/.mozconfig is set correctly.
 
         TODO: See if these args can be passed in some other way?
-
-  2.
-
 '''
 
 from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
@@ -57,24 +54,32 @@ progVersion="Mozilla Commitbuilder 0.1"
 repoURL="http://hg.mozilla.org/mozilla-central"
 makeCommand=["make","-f","client.mk","build"]
 alternateMake = False
-
-#Setup a cache to store our repo
 shellCacheDir = os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache")
+repoPath = os.path.join(shellCacheDir,"mozbuild-trunk")
+
+#Create cache folder if nonexistent
 if not os.path.exists(shellCacheDir):
-    os.mkdir(shellCacheDir)
+  os.mkdir(shellCacheDir)
+
+if not os.path.exists(os.path.join(shellCacheDir,"mozconf")):
+  os.mkdir(os.path.join(shellCacheDir,"mozconf"))
+
+  #f = open(os.path.join(shellCacheDir,"mozconf")+"mozconfig-temp", "w")
+
+  #subprocess.call(["echo",'"mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg"'], cwd=os.path.join(shellCacheDir,"mozconf"), stdout=f)
 
 #Prefix for hg commands
-hgPrefix = ['hg', '-R', os.path.join(shellCacheDir,"mozbuild-trunk")]
+hgPrefix = ['hg', '-R', repoPath]
 
 #Gets or updates our cached repo for building
 def getTrunk():
-  if os.path.exists(os.path.join(shellCacheDir,"mozbuild-trunk",".hg")):
+  if os.path.exists(os.path.join(repoPath,".hg")):
     print "Found a recent trunk. Updating it to head before we begin..."
     updateTrunk = subprocess.call(hgPrefix + ["pull","-u"])
     print "Update successful."
   else:
     print "Trunk not found."
-    makeClean = subprocess.call(["rm","-rf", os.path.join(shellCacheDir,"mozbuild-trunk")])
+    makeClean = subprocess.call(["rm","-rf", repoPath])
     print "Removed old mozbuild-trunk directory. Downloading a fresh repo from mozilla-central..."
     #downloadTrunk = os.popen("hg clone http://hg.mozilla.org/mozilla-central mozbuild-trunk")
     downloadTrunk = subprocess.call(["hg", "clone", repoURL, "mozbuild-trunk"], cwd=shellCacheDir)
@@ -90,33 +95,31 @@ def build():
   #TODO: Use a specific mozconfig
   #Possibly add a flag that lets us toggle what config we're using?
   #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
-  makeData = captureStdout(makeCommand, ignoreStderr=True, currWorkingDir=os.path.join(shellCacheDir,"mozbuild-trunk"))
+
+  #Export Mozillaconfig temporary
+  #subprocess.call(["export","MOZCONFIG="+os.path.join(shellCacheDir,"mozconf")+"mozconfig-temp"])
+
+  makeData = captureStdout(makeCommand, ignoreStderr=True,
+                          currWorkingDir=repoPath)
   if showMakeData == 1:
     print makeData
   print "Build complete!"
 
 def bisect(good,bad):
   if good and bad and validate(good, bad): #valid commit numbers, do the bisection!
-      #getTrunk() if we use this module as a library module this function call is necessary
-
-      #Reset hg's bisect tool
       subprocess.call(hgPrefix+["bisect","--reset"])
-
       subprocess.call(hgPrefix+["up",bad])
       subprocess.call(hgPrefix+["bisect","--bad"])
-
       subprocess.call(hgPrefix+["bisect","--good",good])
-
       bisectRecurse()
   else:
     print "Invalid values. Please check your changeset revision numbers."
 
-#NOTE TO SELF: This needs to recurse. Also, parsing. Stupid.
 def bisectRecurse():
   build() #build current revision
 
   #Run the build and open a prompt ("Is this revision good? (Y/N)")
-  #args = "cd mozbuild-trunk/obj-ff-dbg/dist/bin && ./firefox"
+  #args = "cd "+os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin")+" && ./firefox"
   proc = subprocess.Popen("./firefox", cwd=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin"))
   verdict = ""
   while verdict != 'good' and verdict != 'bad' and verdict != 'b' and verdict != 'g':
@@ -136,8 +139,12 @@ def bisectRecurse():
 
   if retval[1] == 'h':
     quit()
+  elif retval[1] == 'e':
+    print "\n"
+  else:
+    print "Something went wrong! :("
+    quit()
 
-  print "\n"
   bisectRecurse()
 
 #Method by Jesse Ruderman -- captures command line output into python string
@@ -191,6 +198,7 @@ def validate(good, bad):
 
 
 #Main method
+#TODO make this module work as an imported package...currently kind of useless
 if __name__ == "__main__":
   usage = "usage: %prog [options] [optional: repository URL]"
   parser = OptionParser(usage=usage,version=progVersion)

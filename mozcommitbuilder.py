@@ -55,14 +55,15 @@ repoURL="http://hg.mozilla.org/mozilla-central"
 makeCommand=["make","-f","client.mk","build"]
 alternateMake = False
 shellCacheDir = os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache")
+confDir = os.path.join(shellCacheDir, "mozconf")
 repoPath = os.path.join(shellCacheDir,"mozbuild-trunk")
 
 #Create cache folder if nonexistent
 if not os.path.exists(shellCacheDir):
   os.mkdir(shellCacheDir)
 
-if not os.path.exists(os.path.join(shellCacheDir,"mozconf")):
-  os.mkdir(os.path.join(shellCacheDir,"mozconf"))
+if not os.path.exists(confDir):
+  os.mkdir(confDir)
 
   #f = open(os.path.join(shellCacheDir,"mozconf")+"mozconfig-temp", "w")
 
@@ -92,17 +93,11 @@ def hgId(rev):
 #Build the current repo
 def build():
   print "Building..."
-  #TODO: Use a specific mozconfig
-  #Possibly add a flag that lets us toggle what config we're using?
-  #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
-
-  #Export Mozillaconfig temporary
-  #subprocess.call(["export","MOZCONFIG="+os.path.join(shellCacheDir,"mozconf")+"mozconfig-temp"])
-
   makeData = captureStdout(makeCommand, ignoreStderr=True,
                           currWorkingDir=repoPath)
   if showMakeData == 1:
     print makeData
+
   print "Build complete!"
 
 def bisect(good,bad):
@@ -111,6 +106,25 @@ def bisect(good,bad):
       subprocess.call(hgPrefix+["up",bad])
       subprocess.call(hgPrefix+["bisect","--bad"])
       subprocess.call(hgPrefix+["bisect","--good",good])
+
+      #Prebuild stuff here!!
+
+      #Make mozconfig
+      os.chdir(confDir)
+      if os.path.exists("config-default"):
+        os.unlink("config-default")
+
+      f=open('config-default', 'w')
+      #Ensure we know where to find our built stuff by using a custom mozconfig
+      f.write('mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg\n')
+
+      #Cores are nice. Make this an optional flag later.
+      f.write('mk_add_options MOZ_MAKE_FLAGS="-s -j8"')
+      f.close()
+
+      #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
+      os.environ['MOZCONFIG']=confDir+"/config-default"
+
       bisectRecurse()
   else:
     print "Invalid values. Please check your changeset revision numbers."
@@ -118,14 +132,18 @@ def bisect(good,bad):
 def bisectRecurse():
   build() #build current revision
 
-  #Run the build and open a prompt ("Is this revision good? (Y/N)")
-  #args = "cd "+os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin")+" && ./firefox"
-  proc = subprocess.Popen("./firefox", cwd=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin"))
+  if sys.platform == "darwin":
+    proc = subprocess.Popen("./firefox-bin", cwd=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS"))
+  else:
+    print "Your platform is not currently supported."
+    quit()
+
   verdict = ""
   while verdict != 'good' and verdict != 'bad' and verdict != 'b' and verdict != 'g':
     verdict = raw_input("Was this commit good or bad? (type 'good' or 'bad' and press Enter): ")
+
   #do hg bisect --good or --bad depending on whether it's good or bad
-  retval = 10;
+  retval = 0;
   if verdict == 'good':
     retval = captureStdout(hgPrefix+["bisect","--good"])
   else:
@@ -136,7 +154,6 @@ def bisectRecurse():
   #This is totally a hack to avoid parsing
   #if retval starts with "Testing" then it needs to keep going
   #if retval starts with "The" then we can quit
-
   if retval[1] == 'h':
     quit()
   elif retval[1] == 'e':

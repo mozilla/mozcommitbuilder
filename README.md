@@ -9,7 +9,4 @@ Mercurial, all Mozilla compilation dependencies
 ##Usage
 Example:
 
-`
-./builder.py --good=70170 --bad=70172
-
-`
+`./builder.py --good=70170 --bad=70172`

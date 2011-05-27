@@ -166,9 +166,7 @@ def bisectRecurse():
 
 #Method by Jesse Ruderman -- captures command line output into python string
 def captureStdout(cmd, ignoreStderr=False, combineStderr=False, ignoreExitCode=False, currWorkingDir=os.getcwdu()):
-    '''
-    This function captures standard output into a python string.
-    '''
+    #This function captures standard output into a python string.
     if showCapturedCommands:
         print ' '.join(cmd)
     p = subprocess.Popen(cmd,
@@ -216,7 +214,8 @@ def validate(good, bad):
 
 #Main method
 #TODO make this module work as an imported package...currently kind of useless
-if __name__ == "__main__":
+
+def cli():
   usage = "usage: %prog [options] [optional: repository URL]"
   parser = OptionParser(usage=usage,version=progVersion)
   parser.add_option("-g", "--good", dest="good",
@@ -259,3 +258,6 @@ if __name__ == "__main__":
     print "good is "+good+" and bad is "+bad
     print "Begin interactive commit bisect!"
     bisect(good,bad)
+
+if __name__ == "__main__":
+  cli()

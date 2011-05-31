@@ -37,10 +37,7 @@
 '''
   Known Issues
   -------------
-  1. Firefox doesn't close correctly -- potentially decide to run it via a system call?
-  2. Running the build makes an assumption that ~/.mozconfig is set correctly.
 
-        TODO: See if these args can be passed in some other way?
 '''
 
 from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
@@ -119,7 +116,7 @@ def bisect(good,bad):
       f.write('mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg\n')
 
       #Cores are nice. Make this an optional flag later.
-      f.write('mk_add_options MOZ_MAKE_FLAGS="-s -j8"')
+      f.write('mk_add_options MOZ_MAKE_FLAGS="-s"')
       f.close()
 
       #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
@@ -134,6 +131,8 @@ def bisectRecurse():
 
   if sys.platform == "darwin":
     proc = subprocess.Popen("./firefox-bin", cwd=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS"))
+  elif sys.platform == "linux2":
+    proc = subprocess.Popen("./firefox-bin", cwd=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin"))
   else:
     print "Your platform is not currently supported."
     quit()

@@ -43,7 +43,7 @@
 
 from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
 import os, sys, subprocess, string, re, tempfile, shlex
-from mozrunner import Runner
+from mozrunner import Runner, FirefoxRunner
 from mozrunner import FirefoxProfile
 from types import *
 from utils import hgId, captureStdout
@@ -86,6 +86,8 @@ class Builder():
       downloadTrunk = subprocess.call(["hg", "clone", repoURL, "mozbuild-trunk"], cwd=shellCacheDir)
 
   def bisect(self,good,bad):
+    good = hgId(good, hgPrefix)
+    bad = hgId(bad, hgPrefix)
     if good and bad and self.validate(good, bad): #valid commit numbers, do the bisection!
         subprocess.call(hgPrefix+["bisect","--reset"])
         subprocess.call(hgPrefix+["up",bad])
@@ -103,8 +105,13 @@ class Builder():
         #Ensure we know where to find our built stuff by using a custom mozconfig
         f.write('mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg\n')
 
-        #Cores are nice. Make this an optional flag later.
-        f.write('mk_add_options MOZ_MAKE_FLAGS="-s -j'+str(cores)+'"')
+        #HACK :/
+        if sys.platform == "win32" or sys.platform == "cygwin":
+          f.write("ac_add_options --with-windows-version=600\n")
+          f.write("ac_add_options --enable-application=browser\n")
+        else:
+          f.write('mk_add_options MOZ_MAKE_FLAGS="-s -j'+str(cores)+'"')
+
         f.close()
 
         #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
@@ -118,9 +125,17 @@ class Builder():
     self.build() #build current revision
 
     if sys.platform == "darwin":
-      proc = subprocess.Popen("./firefox-bin", cwd<D-c>=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS"))
+      runner = FirefoxRunner()
+      runner.binary = os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS")+"/firefox-bin"
+      runner.start()
     elif sys.platform == "linux2":
-      proc = subprocess.Popen("./firefox-bin", cwd=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin"))
+      runner = FirefoxRunner()
+      runner.binary = os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox"
+      runner.start()
+    elif sys.platform == "win32" or sys.platform == "cygwin":
+      runner = FirefoxRunner()
+      runner.binary = os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox.exe"
+      runner.start()
     else:
       print "Your platform is not currently supported."
       quit()
@@ -208,8 +223,6 @@ def cli():
   if not options.good or not options.bad:
     print "Use -h flag for available options"
   else:
-    good = hgId(options.good, hgPrefix)
-    bad = hgId(options.bad, hgPrefix)
     newrepoURL = options.repoURL
     newCores = options.cores
 
@@ -231,9 +244,8 @@ def cli():
     print "Begin interactive commit bisect!"
     #bisect(good,bad)
 
-    runner = Runner(binary=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS")+"firefox-bin", cmdargs=[])
     builder = Builder()
-    builder.bisect(good,bad)
+    builder.bisect(options.good,options.bad)
 
 if __name__ == "__main__":
   cli()

@@ -33,14 +33,6 @@
 #
 # ***** END LICENSE BLOCK *****
 
-'''
-  TODO
-  -------------
-  1) Use mozrunner rather than subprocess.popen to run firefox
-  2) Commit validations
-
-'''
-
 from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
 import os, sys, subprocess, string, re, tempfile, shlex
 from mozrunner import Runner, FirefoxRunner
@@ -83,23 +75,39 @@ class Builder():
 
     self.getTrunk()
 
-  def changesetFromDay(self, date):
+  def getTip(self):
+    try:
+      tiprev = subprocess.Popen(hgPrefix+["tip"],stdout=subprocess.PIPE)
+      capturedString = tiprev.communicate()
       try:
-        hgstring = subprocess.Popen(hgPrefix+['log','-d',date,'-l','1'],stdout=subprocess.PIPE)
-        parsestring = hgstring.communicate()
-        try:
-          changesetString = parsestring[0].split("\n")[0].split(":")[2]
-        except:
-          print "No such changeset"
-          pass
-      except OSError as err:
-        if err.strerror == 'No such file or directory':
-          raise DVCSError('The ``hg`` executable file was not found.')
+        changesetTip = capturedString[0].split("\n")[0].split(" ")[3].split(":")[1]
+      except:
+        pass
+    except:
+      print "Woops, something went wrong!"
+      quit()
+    if changesetTip:
+      return changesetTip
+    else:
+      print "Couldn't get the tip changeset."
 
-      if changesetString:
-        return changesetString
-      else:
-        return False
+  def changesetFromDay(self, date):
+    try:
+      hgstring = subprocess.Popen(hgPrefix+['log','-r',':','-d',date,'-l','1'],stdout=subprocess.PIPE)
+      parsestring = hgstring.communicate()
+      try:
+        changesetString = parsestring[0].split("\n")[0].split(":")[2]
+      except:
+        print "No such changeset"
+        pass
+    except OSError as err:
+      if err.strerror == 'No such file or directory':
+        raise DVCSError('The ``hg`` executable file was not found.')
+
+    if changesetString:
+      return changesetString
+    else:
+      return False
 
   #Gets or updates our cached repo for building
   def getTrunk(self):

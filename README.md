@@ -15,7 +15,7 @@ mozcommitbuilder is available on pypi, so you can install it with easy_install o
 #Usage
 Example:
 
-	mozcommitbuilder --good=70170 --bad=70172`
+	mozcommitbuilder --good=70170 --bad=70172
 
 #Other
 If the range of commits spans more than a day, try [mozregression](http://harthur.github.com/mozregression)

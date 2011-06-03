@@ -62,6 +62,9 @@ repoPath = os.path.join(shellCacheDir,"mozbuild-trunk")
 #Prefix for hg commands
 hgPrefix = ['hg', '-R', repoPath]
 
+class DVCSError(Exception):
+    pass
+
 class Builder():
   def __init__(self):
     #self.runner = runner
@@ -70,7 +73,33 @@ class Builder():
       os.mkdir(shellCacheDir)
     if not os.path.exists(confDir):
       os.mkdir(confDir)
+
+    try:
+      testhgInstall = subprocess.Popen(["hg","--version"],stdout=subprocess.PIPE)
+      testresult = testhgInstall.communicate()
+    except OSError as err:
+      print "hg not installed on this system."
+      quit()
+
     self.getTrunk()
+
+  def changesetFromDay(self, date):
+      try:
+        hgstring = subprocess.Popen(hgPrefix+['log','-d',date,'-l','1'],stdout=subprocess.PIPE)
+        parsestring = hgstring.communicate()
+        try:
+          changesetString = parsestring[0].split("\n")[0].split(":")[2]
+        except:
+          print "No such changeset"
+          pass
+      except OSError as err:
+        if err.strerror == 'No such file or directory':
+          raise DVCSError('The ``hg`` executable file was not found.')
+
+      if changesetString:
+        return changesetString
+      else:
+        return False
 
   #Gets or updates our cached repo for building
   def getTrunk(self):
@@ -125,16 +154,13 @@ class Builder():
     self.build() #build current revision
 
     if sys.platform == "darwin":
-      runner = FirefoxRunner()
-      runner.binary = os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS")+"/firefox-bin"
+      runner = FirefoxRunner(binary=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS")+"/firefox-bin")
       runner.start()
     elif sys.platform == "linux2":
-      runner = FirefoxRunner()
-      runner.binary = os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox"
+      runner = FirefoxRunner(binary=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox")
       runner.start()
     elif sys.platform == "win32" or sys.platform == "cygwin":
-      runner = FirefoxRunner()
-      runner.binary = os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox.exe"
+      runner = FirefoxRunner(binary=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox.exe")
       runner.start()
     else:
       print "Your platform is not currently supported."
@@ -249,3 +275,4 @@ def cli():
 
 if __name__ == "__main__":
   cli()
+

@@ -48,7 +48,7 @@ from utils import hgId, captureStdout
 
 #Global Variables
 showMakeData = 0
-progVersion="0.3.3"
+progVersion="0.3.4"
 
 class Builder():
   def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central"):

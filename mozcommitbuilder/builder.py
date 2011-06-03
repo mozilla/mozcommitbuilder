@@ -33,6 +33,12 @@
 #
 # ***** END LICENSE BLOCK *****
 
+
+"""
+Known Issues:
+  1) Multi-core compilation on Windows not supported
+"""
+
 from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
 import os, sys, subprocess, string, re, tempfile, shlex
 from mozrunner import Runner, FirefoxRunner
@@ -40,31 +46,26 @@ from mozrunner import FirefoxProfile
 from types import *
 from utils import hgId, captureStdout
 
-#Setting Variables
+#Global Variables
 showMakeData = 0
-cores = 1
-progVersion="Mozilla Commitbuilder 0.1"
-repoURL="http://hg.mozilla.org/mozilla-central"
-makeCommand=["make","-f","client.mk","build"]
-alternateMake = False
-shellCacheDir = os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache")
-confDir = os.path.join(shellCacheDir, "mozconf")
-repoPath = os.path.join(shellCacheDir,"mozbuild-trunk")
-
-#Prefix for hg commands
-hgPrefix = ['hg', '-R', repoPath]
-
-class DVCSError(Exception):
-    pass
+progVersion="0.3.3"
 
 class Builder():
-  def __init__(self):
-    #self.runner = runner
-    #Create cache folder if nonexistent
+  def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central"):
+    #Generate cache, test for mercurial, update or download trunk
+
+    self.makeCommand = makeCommand
+    self.shellCacheDir = shellCacheDir
+    self.cores = cores
+    self.repoURL = repoURL
+    self.confDir = os.path.join(shellCacheDir, "mozconf")
+    self.repoPath = os.path.join(shellCacheDir,"mozbuild-trunk")
+    self.hgPrefix = ['hg', '-R', self.repoPath]
+
     if not os.path.exists(shellCacheDir):
       os.mkdir(shellCacheDir)
-    if not os.path.exists(confDir):
-      os.mkdir(confDir)
+    if not os.path.exists(self.confDir):
+      os.mkdir(self.confDir)
 
     try:
       testhgInstall = subprocess.Popen(["hg","--version"],stdout=subprocess.PIPE)
@@ -76,8 +77,9 @@ class Builder():
     self.getTrunk()
 
   def getTip(self):
+    #Parse output of hg for tip's changeset identifier hash
     try:
-      tiprev = subprocess.Popen(hgPrefix+["tip"],stdout=subprocess.PIPE)
+      tiprev = subprocess.Popen(self.hgPrefix+["tip"],stdout=subprocess.PIPE)
       capturedString = tiprev.communicate()
       try:
         changesetTip = capturedString[0].split("\n")[0].split(" ")[3].split(":")[1]
@@ -92,49 +94,51 @@ class Builder():
       print "Couldn't get the tip changeset."
 
   def changesetFromDay(self, date):
+    #Gets first changeset from a given date
     try:
-      hgstring = subprocess.Popen(hgPrefix+['log','-r',':','-d',date,'-l','1'],stdout=subprocess.PIPE)
+      hgstring = subprocess.Popen(self.hgPrefix+['log','-r',':','-d',date,'-l','1'],stdout=subprocess.PIPE)
       parsestring = hgstring.communicate()
       try:
         changesetString = parsestring[0].split("\n")[0].split(":")[2]
       except:
         print "No such changeset"
         pass
-    except OSError as err:
-      if err.strerror == 'No such file or directory':
-        raise DVCSError('The ``hg`` executable file was not found.')
+    except:
+      print "Failed to acquire changeset hash"
+      quit()
 
     if changesetString:
       return changesetString
     else:
       return False
 
-  #Gets or updates our cached repo for building
   def getTrunk(self):
-    if os.path.exists(os.path.join(repoPath,".hg")):
+    #Gets or updates our cached repo for building
+    if os.path.exists(os.path.join(self.repoPath,".hg")):
       print "Found a recent trunk. Updating it to head before we begin..."
-      updateTrunk = subprocess.call(hgPrefix + ["pull","-u"])
+      updateTrunk = subprocess.call(self.hgPrefix + ["pull","-u"])
       print "Update successful."
     else:
       print "Trunk not found."
-      makeClean = subprocess.call(["rm","-rf", repoPath])
+      makeClean = subprocess.call(["rm","-rf", self.repoPath])
       print "Removed old mozbuild-trunk directory. Downloading a fresh repo from mozilla-central..."
       #downloadTrunk = os.popen("hg clone http://hg.mozilla.org/mozilla-central mozbuild-trunk")
-      downloadTrunk = subprocess.call(["hg", "clone", repoURL, "mozbuild-trunk"], cwd=shellCacheDir)
+      downloadTrunk = subprocess.call(["hg", "clone", self.repoURL, "mozbuild-trunk"], cwd=self.shellCacheDir)
 
   def bisect(self,good,bad):
-    good = hgId(good, hgPrefix)
-    bad = hgId(bad, hgPrefix)
+    #Call hg bisect with initial params, set up building environment (mozconfig)
+    good = hgId(good, self.hgPrefix)
+    bad = hgId(bad, self.hgPrefix)
     if good and bad and self.validate(good, bad): #valid commit numbers, do the bisection!
-        subprocess.call(hgPrefix+["bisect","--reset"])
-        subprocess.call(hgPrefix+["up",bad])
-        subprocess.call(hgPrefix+["bisect","--bad"])
-        subprocess.call(hgPrefix+["bisect","--good",good])
+        subprocess.call(self.hgPrefix+["bisect","--reset"])
+        subprocess.call(self.hgPrefix+["up",bad])
+        subprocess.call(self.hgPrefix+["bisect","--bad"])
+        subprocess.call(self.hgPrefix+["bisect","--good",good])
 
         #Prebuild stuff here!!
 
         #Make mozconfig
-        os.chdir(confDir)
+        os.chdir(self.confDir)
         if os.path.exists("config-default"):
           os.unlink("config-default")
 
@@ -147,28 +151,31 @@ class Builder():
           f.write("ac_add_options --with-windows-version=600\n")
           f.write("ac_add_options --enable-application=browser\n")
         else:
-          f.write('mk_add_options MOZ_MAKE_FLAGS="-s -j'+str(cores)+'"')
+          f.write('mk_add_options MOZ_MAKE_FLAGS="-s -j'+str(self.cores)+'"')
 
         f.close()
 
         #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
-        os.environ['MOZCONFIG']=confDir+"/config-default"
+        os.environ['MOZCONFIG']=self.confDir+"/config-default"
 
         self.bisectRecurse()
     else:
       print "Invalid values. Please check your changeset revision numbers."
 
   def bisectRecurse(self):
-    self.build() #build current revision
+    #Recursively build and prompt
 
+    self.build()
+
+    #Run the built binary
     if sys.platform == "darwin":
-      runner = FirefoxRunner(binary=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS")+"/firefox-bin")
+      runner = FirefoxRunner(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS")+"/firefox-bin")
       runner.start()
     elif sys.platform == "linux2":
-      runner = FirefoxRunner(binary=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox")
+      runner = FirefoxRunner(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox")
       runner.start()
     elif sys.platform == "win32" or sys.platform == "cygwin":
-      runner = FirefoxRunner(binary=os.path.join(shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox.exe")
+      runner = FirefoxRunner(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox.exe")
       runner.start()
     else:
       print "Your platform is not currently supported."
@@ -181,18 +188,16 @@ class Builder():
     #do hg bisect --good or --bad depending on whether it's good or bad
     retval = 0;
     if verdict == 'good':
-      retval = captureStdout(hgPrefix+["bisect","--good"])
+      retval = captureStdout(self.hgPrefix+["bisect","--good"])
     else:
-      retval = captureStdout(hgPrefix+["bisect","--bad"])
+      retval = captureStdout(self.hgPrefix+["bisect","--bad"])
 
     print str(retval)
 
-    #This is totally a hack to avoid parsing
-    #if retval starts with "Testing" then it needs to keep going
-    #if retval starts with "The" then we can quit
-    if retval[1] == 'h':
+    # HACK
+    if retval[1] == 'h': #if retval starts with "the" then we can quit
       quit()
-    elif retval[1] == 'e':
+    elif retval[1] == 'e': #if retval starts with "testing" then it needs to keep going
       print "\n"
     else:
       print "Something went wrong! :("
@@ -200,36 +205,28 @@ class Builder():
 
     self.bisectRecurse()
 
-  #Build the current repo
   def build(self):
+    #Call make on our cached trunk
     print "Building..."
-    makeData = captureStdout(makeCommand, ignoreStderr=True,
-                            currWorkingDir=repoPath)
+    makeData = captureStdout(self.makeCommand, ignoreStderr=True,
+                            currWorkingDir=self.repoPath)
     if showMakeData == 1:
       print makeData
 
     print "Build complete!"
 
 
-  #Check that given changeset numbers aren't wonky
   def validate(self, good, bad):
+    #Check that given changeset numbers aren't wonky
     if (good == bad):
       return False
     return True
-    '''                                              "
-      TODO Validations:
-        1) If the commit numbers aren't real commits, abort
-        2) If good is newer than bad, quit
-        3) If good is right after bad, return the bad
-    '''
-
-
-#Main method
-#TODO make this module work as an imported package...currently kind of useless
 
 def cli():
-  usage = "usage: %prog [options] [optional: repository URL]"
-  parser = OptionParser(usage=usage,version=progVersion)
+  #Command line interface
+  usage = "usage: %prog --good=[changeset] --bad=[changeset] [options]"
+
+  parser = OptionParser(usage=usage,version="%prog "+progVersion)
   parser.add_option("-g", "--good", dest="good",
                     help="Last known good revision",
                     metavar="changeset#")
@@ -247,9 +244,11 @@ def cli():
   group.add_option("-r", "--repo", dest="repoURL",
                     help="alternative mercurial repo to bisect",
                     metavar="valid repository url")
+
   group.add_option("-m", "--altmake", dest="alternateMake",
                     help="alternative make command for building",
                     metavar="make command, in quotes")
+
   parser.add_option_group(group)
   (options, args) = parser.parse_args()
 
@@ -257,30 +256,21 @@ def cli():
   if not options.good or not options.bad:
     print "Use -h flag for available options"
   else:
-    newrepoURL = options.repoURL
-    newCores = options.cores
-
-    if newrepoURL:
-      print "Flag: using "+newrepoURL+" instead of Mozilla Central as our repository."
-      global repoURL
-      repoURL = newrepoURL
-
-    if alternateMake:
-      print "Flag: using custom make command to build the repo."
-      global makeCommand
-      makeCommand = shlex.split(alternateMake)
-
-    if newCores:
-      global cores
-      cores = newCores
-      print "Compiling with "+str(cores)+" cores:"
 
     print "Begin interactive commit bisect!"
-    #bisect(good,bad)
+    commitbuilder = Builder()
 
-    builder = Builder()
-    builder.bisect(options.good,options.bad)
+
+  if options.cores:
+    commitbuilder.cores = options.cores
+    print "Compiling with "+options.cores+ " cores."
+  if options.repoURL:
+    commitbuilder.repoURL = options.repoURL
+    print "Using alternative repository "+options.repoURL
+  if options.alternateMake:
+    commitbuilder.makeCommand = shlex.split(options.alternateMake)
+
+  commitbuilder.bisect(options.good,options.bad)
 
 if __name__ == "__main__":
   cli()
-

@@ -236,22 +236,23 @@ class Builder():
     print "Binary build successful!"
 
     binary = None
+    renamedBinary = None
     distFolder = os.path.join(self.repoPath,"obj-ff-dbg","dist")
     #return path to package
     if sys.platform == "darwin":
         binary = glob.glob(distFolder+"/firefox-*.dmg")[0]
         renamedBinary = str(revision[:8]) + ".dmg" #Don't want the filename to be too long :)
-        print renamedBinary + " is binary"
     elif sys.platform == "linux2":
-        binary = None
-        renamedBinary = None
+        binary = glob.glob(distFolder+"/firefox-*.tar.gz")[0]
+        renamedBinary = str(revision[:8]) + ".tar.gz"
     elif sys.platform == "win32" or sys.platform == "cygwin":
-        binary = None
-        renamedBinary = None
+        binary = glob.glob(distFolder+"/firefox-*.zip")[0]
+        renamedBinary = str(revision[:8]) + ".zip"
     else:
       print "ERROR: This platform is unsupported."
       quit()
 
+    print renamedBinary + " is the binary:"
     if binary != None:
         #print "Move binary from " + binary
         #print " to " + os.path.join(self.shellCacheDir,renamedBinary)

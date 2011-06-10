@@ -95,6 +95,7 @@ class Builder():
 
   def changesetFromDay(self, date):
     #Gets first changeset from a given date
+    changesetString = None
     try:
       hgstring = subprocess.Popen(self.hgPrefix+['log','-r',':','-d',date,'-l','1'],stdout=subprocess.PIPE)
       parsestring = hgstring.communicate()
@@ -107,7 +108,7 @@ class Builder():
       print "Failed to acquire changeset hash"
       quit()
 
-    if changesetString:
+    if changesetString != None:
       return changesetString
     else:
       return False

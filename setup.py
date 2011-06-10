@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 #from setuptools import setup, find_packages
 setup(name='mozcommitbuilder',
       packages=['mozcommitbuilder'],
-      version='0.3.4',
+      version='0.3.6',
       description ="""Regression finder using Mozilla central repo""",
       author="Sam Liu",
       author_email="sam@ambushnetworks.com",

@@ -227,6 +227,8 @@ class Builder():
     print "Build complete!"
 
   def getBinary(self, revision):
+    #Return path of binary for a given changeset
+    #mozbuildserver uses this to build revisions
     self.build(changeset=revision)
 
     #run make package
@@ -263,10 +265,10 @@ class Builder():
         except:
             pass
 
-        shutil.move(binary, os.path.join(self.shellCacheDir,renamedBinary))
+        shutil.move(binary, os.path.join(self.shellCacheDir,"builds",renamedBinary))
 
         #Return binary path
-        return os.path.join(self.shellCacheDir,renamedBinary)
+        return (os.path.join(self.shellCacheDir,"builds",renamedBinary), renamedBinary)
 
     print "ERROR: Binary not found."
     quit()

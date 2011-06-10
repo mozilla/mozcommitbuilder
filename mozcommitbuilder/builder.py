@@ -228,7 +228,7 @@ class Builder():
 
   def getBinary(self, revision):
     #Return path of binary for a given changeset
-    mozbuildserver uses this to build revisions
+    #mozbuildserver uses this to build revisions
     self.build(changeset=revision)
 
     #run make package

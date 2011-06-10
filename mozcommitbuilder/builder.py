@@ -40,11 +40,11 @@ Known Issues:
 """
 
 from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
-import os, sys, subprocess, string, re, tempfile, shlex
 from mozrunner import Runner, FirefoxRunner
 from mozrunner import FirefoxProfile
 from types import *
 from utils import hgId, captureStdout
+import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil
 
 #Global Variables
 showMakeData = 0
@@ -112,7 +112,12 @@ class Builder():
     else:
       return False
 
-  def getTrunk(self):
+  def getTrunk(self, makeClean=False):
+    if makeClean:
+        try:
+            shutil.rmtree(self.repoPath)
+        except:
+            pass
     #Gets or updates our cached repo for building
     if os.path.exists(os.path.join(self.repoPath,".hg")):
       print "Found a recent trunk. Updating it to head before we begin..."
@@ -205,7 +210,12 @@ class Builder():
 
     self.bisectRecurse()
 
-  def build(self):
+  def build(self, changeset=0):
+    #Build a binary and return the file path
+    #Binary file named by changeset number
+    if changeset != 0:
+      print "Switching to revision "+changeset[:8]+"..."
+      subprocess.call(self.hgPrefix+["update",changeset]) #switch to a given directory
     #Call make on our cached trunk
     print "Building..."
     makeData = captureStdout(self.makeCommand, ignoreStderr=True,
@@ -215,6 +225,49 @@ class Builder():
 
     print "Build complete!"
 
+  def getBinary(self, revision):
+    self.build(changeset=revision)
+
+    #run make package
+    print "Making binary..."
+    makeData = captureStdout(["make","package"], ignoreStderr=True,
+                            currWorkingDir=os.path.join(self.repoPath,"obj-ff-dbg"))
+    print "Binary build successful!"
+
+    binary = None
+    distFolder = os.path.join(self.repoPath,"obj-ff-dbg","dist")
+    #return path to package
+    if sys.platform == "darwin":
+        binary = glob.glob(distFolder+"/firefox-*.dmg")[0]
+        renamedBinary = str(revision[:8]) + ".dmg" #Don't want the filename to be too long :)
+        print renamedBinary + " is binary"
+    elif sys.platform == "linux2":
+        binary = None
+        renamedBinary = None
+    elif sys.platform == "win32" or sys.platform == "cygwin":
+        binary = None
+        renamedBinary = None
+    else:
+      print "ERROR: This platform is unsupported."
+      quit()
+
+    if binary != None:
+        #print "Move binary from " + binary
+        #print " to " + os.path.join(self.shellCacheDir,renamedBinary)
+
+        #Move the binary into the correct place.
+        try:
+            os.remove(os.path.join(self.shellCacheDir,renamedBinary))
+        except:
+            pass
+
+        shutil.move(binary, os.path.join(self.shellCacheDir,renamedBinary))
+
+        #Return binary path
+        return os.path.join(self.shellCacheDir,renamedBinary)
+
+    print "ERROR: Binary not found."
+    quit()
 
   def validate(self, good, bad):
     #Check that given changeset numbers aren't wonky
@@ -237,6 +290,10 @@ def cli():
                     help="Number of cores to compile with",
                     metavar="numcores")
 
+  parser.add_option("-f", "--freshtrunk", dest="makeClean",
+                    help="Delete old trunk and use a fresh one",
+                    metavar="1", default=0)
+
   group = OptionGroup(parser, "Unstable Options",
                     "Caution: use these options at your own risk.  "
                     "They aren't recommended.")
@@ -254,23 +311,23 @@ def cli():
 
   # Run it
   if not options.good or not options.bad:
-    print "Use -h flag for available options"
+    print "Use -h flag for available options. You must specify both a good and a bad date."
   else:
 
     print "Begin interactive commit bisect!"
+
     commitbuilder = Builder()
 
+    if options.cores:
+      commitbuilder.cores = options.cores
+      print "Compiling with "+options.cores+ " cores."
+    if options.repoURL:
+      commitbuilder.repoURL = options.repoURL
+      print "Using alternative repository "+options.repoURL
+    if options.alternateMake:
+      commitbuilder.makeCommand = shlex.split(options.alternateMake)
 
-  if options.cores:
-    commitbuilder.cores = options.cores
-    print "Compiling with "+options.cores+ " cores."
-  if options.repoURL:
-    commitbuilder.repoURL = options.repoURL
-    print "Using alternative repository "+options.repoURL
-  if options.alternateMake:
-    commitbuilder.makeCommand = shlex.split(options.alternateMake)
-
-  commitbuilder.bisect(options.good,options.bad)
+    commitbuilder.bisect(options.good,options.bad)
 
 if __name__ == "__main__":
   cli()

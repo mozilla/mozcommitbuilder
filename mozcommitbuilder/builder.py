@@ -228,34 +228,43 @@ class Builder():
 
   def getBinary(self, revision):
     #Return path of binary for a given changeset
-    #mozbuildserver uses this to build revisions
+    mozbuildserver uses this to build revisions
     self.build(changeset=revision)
 
     #run make package
     print "Making binary..."
     makeData = captureStdout(["make","package"], ignoreStderr=True,
                             currWorkingDir=os.path.join(self.repoPath,"obj-ff-dbg"))
-    print "Binary build successful!"
 
     binary = None
     renamedBinary = None
     distFolder = os.path.join(self.repoPath,"obj-ff-dbg","dist")
     #return path to package
     if sys.platform == "darwin":
-        binary = glob.glob(distFolder+"/firefox-*.dmg")[0]
+        try:
+            binary = glob.glob(distFolder+"/firefox-*.dmg")[0]
+        except:
+            binary = None
         renamedBinary = str(revision[:8]) + ".dmg" #Don't want the filename to be too long :)
     elif sys.platform == "linux2":
-        binary = glob.glob(distFolder+"/firefox-*.tar.gz")[0]
+        try:
+            binary = glob.glob(distFolder+"/firefox-*.tar.gz")[0]
+        except:
+            binary = None
         renamedBinary = str(revision[:8]) + ".tar.gz"
     elif sys.platform == "win32" or sys.platform == "cygwin":
-        binary = glob.glob(distFolder+"/firefox-*.zip")[0]
+        try:
+            binary = glob.glob(distFolder+"/firefox-*.zip")[0]
+        except:
+            binary = None
         renamedBinary = str(revision[:8]) + ".zip"
     else:
       print "ERROR: This platform is unsupported."
       quit()
 
-    print renamedBinary + " is the binary:"
     if binary != None:
+        print "Binary build successful!"
+        print renamedBinary + " is the binary:"
         #print "Move binary from " + binary
         #print " to " + os.path.join(self.shellCacheDir,renamedBinary)
 

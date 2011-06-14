@@ -44,7 +44,10 @@ from mozrunner import Runner, FirefoxRunner
 from mozrunner import FirefoxProfile
 from types import *
 from utils import hgId, captureStdout
-import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil
+import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil,datetime
+import simplejson, urllib
+
+
 
 #Global Variables
 showMakeData = 0
@@ -93,25 +96,37 @@ class Builder():
     else:
       print "Couldn't get the tip changeset."
 
-  def changesetFromDay(self, date):
+  def increment_day(self, date):
+    s = date.split("-")
+    delta = datetime.timedelta(days=1)
+    nextDate = datetime.date(int(s[0]),int(s[1]),int(s[2])) + delta
+    return str(nextDate)
+
+  def changesetFromDay(self, date, oldest=True):
     #Gets first changeset from a given date
+    nextDate = self.increment_day(date)
+    pushlog_url = "http://hg.mozilla.org/mozilla-central/json-pushes?startdate="+date+"&enddate="+nextDate
+    pushlog_json = simplejson.load(urllib.urlopen(pushlog_url))
+    sorted_keys = sorted(map(int,pushlog_json.keys()))
+
     changesetString = None
-    try:
-      hgstring = subprocess.Popen(self.hgPrefix+['log','-r',':','-d',date,'-l','1'],stdout=subprocess.PIPE)
-      parsestring = hgstring.communicate()
-      try:
-        changesetString = parsestring[0].split("\n")[0].split(":")[2]
-      except:
-        print "No such changeset"
-        pass
-    except:
-      print "Failed to acquire changeset hash"
-      quit()
+    if oldest:
+        try:
+            pushlog_first = str(sorted_keys.pop(0))
+            changesetString = pushlog_json[pushlog_first]['changesets']
+        except:
+            pass
+    else:
+        try:
+            pushlog_last = str(sorted_keys.pop(-1))
+            changesetString = pushlog_json[pushlog_last]['changesets']
+        except:
+            pass
 
     if changesetString != None:
       return changesetString
-    else:
-      return False
+
+    return False
 
   def getTrunk(self, makeClean=False):
     if makeClean:

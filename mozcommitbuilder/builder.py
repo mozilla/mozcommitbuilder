@@ -113,13 +113,13 @@ class Builder():
     if oldest:
         try:
             pushlog_first = str(sorted_keys.pop(0))
-            changesetString = pushlog_json[pushlog_first]['changesets']
+            changesetString = str(pushlog_json[pushlog_first]['changesets'][0])
         except:
             pass
     else:
         try:
             pushlog_last = str(sorted_keys.pop(-1))
-            changesetString = pushlog_json[pushlog_last]['changesets']
+            changesetString = str(pushlog_json[pushlog_last]['changesets'][0])
         except:
             pass
 

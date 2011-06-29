@@ -58,15 +58,9 @@ commitBuilder.getBinary("70168") # Builds binary from revision,
 
 ```python
 #Repository information:
-
-#Returns tip's changest number
-mostRecentChangeset = commitBuilder.getTip()
-
-#Returns first changeset from a given date
-firstChangesetFromDay = commitBuilder.changesetFromDay(date="2011-06-31")
-
-#Returns last changeset from a given date
-lastChangesetFromDay = commitBuilder.changesetFromDay(date="2011-06-31",oldest=False)
+mostRecentChangeset = commitBuilder.getTip() #Returns tip's changest number
+firstChangesetFromDay = commitBuilder.changesetFromDay(date="2011-06-31") #Get first changeset from date
+lastChangesetFromDay = commitBuilder.changesetFromDay(date="2011-06-31",oldest=False) #Last changeset from date
 ```
 
 

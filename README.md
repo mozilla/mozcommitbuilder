@@ -48,12 +48,18 @@ from mozcommitbuilder import Builder
 commitBuilder = Builder()
 
 # Optional Constructor Params:
+"""
 1. makeCommand, default=["make","-f","client.mk","build"]
 2. cores, default=1
 3. mozconf, default=None (create our own)
 4. shellCacheDir, default=~/moz-commitbuilder-cache (where to instantiate the cache)
 5. repoURL, default=moz-central repository URL
 6. clean, default=False (make clean trunk)
+"""
+
+#Example:
+commitBuilder = Builder(cores=8, mozconf="~/myDirectory/mozconf") #custom mozconf
+                                                                  #build with 8 cores
 ```
 
 ```python

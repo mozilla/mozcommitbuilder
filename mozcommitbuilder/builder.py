@@ -247,6 +247,7 @@ class Builder():
         #Build a binary and return the file path
         #Binary file named by changeset number
         if changeset != 0:
+            changeset = str(changeset)
             print "Switching to revision "+changeset[:8]+"..."
             subprocess.call(self.hgPrefix+["update",changeset]) #switch to a given directory
 

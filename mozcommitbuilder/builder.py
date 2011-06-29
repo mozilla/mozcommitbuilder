@@ -391,6 +391,7 @@ def cli():
     parser.add_option_group(group4)
     (options, args) = parser.parse_args()
 
+    # If a user only wants to make clean or has supplied no options:
     if (not options.good or not options.bad) and not options.single:
         if options.makeClean:
             #Make a clean trunk
@@ -401,19 +402,21 @@ def cli():
             print """You can also use the --single=[chset] flag to build and --run to run a single changeset."""
         quit()
 
-    # Run it
+    # Set up a trunk for either bisection or build.
     mozConfiguration = options.mozconf
     commitBuilder = Builder(clean=options.makeClean, mozconf=mozConfiguration)
     if options.cores:
         commitBuilder.cores = options.cores
         commitBuilder.mozconfigure()
 
+    # TODO: Allow a user to build a binary from cli
     if options.binary:
         if options.revision:
             pass
         else:
             print "You need to specify a revision to build the binary from."
 
+    # For building single commits:
     if options.single:
         if options.run:
             commitBuilder.buildAndRun(changeset=options.single)
@@ -422,6 +425,7 @@ def cli():
             commitBuilder.build(changeset=options.single)
             print "Local trunk built. Not running."
 
+    # For bisections:
     elif options.good and options.bad:
         print "Begin interactive commit bisect!"
 
@@ -432,6 +436,8 @@ def cli():
         #    commitBuilder.makeCommand = shlex.split(options.alternateMake)
 
         commitBuilder.bisect(options.good,options.bad)
+
+    # Should not get here.
     else:
         print "Invalid input. Please try again."
 

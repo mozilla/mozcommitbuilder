@@ -56,7 +56,7 @@ import simplejson, urllib
 
 #Global Variables
 showMakeData = 0
-progVersion="0.3.7"
+progVersion="0.4.0"
 
 class Builder():
     def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False, mozconf=None):
@@ -342,46 +342,63 @@ def cli():
             """
 
     parser = OptionParser(usage=usage,version="%prog "+progVersion)
-    parser.add_option("-g", "--good", dest="good",
-                                        help="Last known good revision",
-                                        metavar="[changeset]")
-    parser.add_option("-b", "--bad", dest="bad",
-                                        help="Broken commit revision",
-                                        metavar="[changeset]")
-    parser.add_option("-c", "--cores", dest="cores",
+    group1 = OptionGroup(parser, "Global Options",
+                                        "")
+    group1.add_option("-c", "--cores", dest="cores",
                                         help="Number of cores to compile with",
                                         metavar="[numcores]")
+    group1.add_option("-f", "--freshtrunk", action = "store_true", dest="makeClean", default=False,
+                                        help="Delete old trunk and use a fresh one")
 
-    parser.add_option("-s", "--single", dest="single",
+    group2 = OptionGroup(parser, "Bisector Options",
+                                        "These are options for bisecting on changesets")
+    group2.add_option("-g", "--good", dest="good",
+                                        help="Last known good revision",
+                                        metavar="[changeset]")
+    group2.add_option("-b", "--bad", dest="bad",
+                                        help="Broken commit revision",
+                                        metavar="[changeset]")
+
+    group3 = OptionGroup(parser, "Single Changeset Options",
+                                        "These are options for building a single changeset")
+
+    group3.add_option("-s", "--single", dest="single",
                                         help="Build a single changeset",
                                         metavar="[changeset]")
 
-    parser.add_option("-e", "--run", action="store_true", dest="run", default=False,
+    group3.add_option("-e", "--run", action="store_true", dest="run", default=False,
                                         help="run the current build -- only works if already built")
 
-    parser.add_option("-f", "--freshtrunk", action = "store_true", dest="makeClean", default=False,
-                                        help="Delete old trunk and use a fresh one")
 
-    group = OptionGroup(parser, "Unstable Options",
+    group4 = OptionGroup(parser, "Unstable Options",
                                         "Caution: use these options at your own risk.  "
                                         "They aren't recommended.")
 
-    group.add_option("-r", "--repo", dest="repoURL",
+    group4.add_option("-r", "--repo", dest="repoURL",
                                         help="alternative mercurial repo to bisect",
                                         metavar="valid repository url")
 
     #group.add_option("-m", "--altmake", dest="alternateMake",
     #                                    help="alternative make command for building",
     #                                    metavar="make command, in quotes")
-    group.add_option("-m", "--mozconfig", dest="mozconf",
+    group4.add_option("-m", "--mozconfig", dest="mozconf",
                                         help="external mozconfig if so desired",
                                         metavar="path_to_mozconfig", default=False)
 
-    parser.add_option_group(group)
+    parser.add_option_group(group1)
+    parser.add_option_group(group2)
+    parser.add_option_group(group3)
+    parser.add_option_group(group4)
     (options, args) = parser.parse_args()
 
     if (not options.good or not options.bad) and not options.single:
-        print """Use -h flag for available options. To bisect, you must specify both a good and a bad date. (-g and -b flags are not optional). You can also use the --single=[chset] flag to build and --run to run a single changeset."""
+        if options.makeClean:
+            #Make a clean trunk
+            commitBuilder = Builder(clean=options.makeClean)
+        else:
+            print """Use -h flag for available options."""
+            print """To bisect, you must specify both a good and a bad date. (-g and -b flags are not optional)."""
+            print """You can also use the --single=[chset] flag to build and --run to run a single changeset."""
         quit()
 
     # Run it
@@ -390,6 +407,12 @@ def cli():
     if options.cores:
         commitBuilder.cores = options.cores
         commitBuilder.mozconfigure()
+
+    if options.binary:
+        if options.revision:
+            pass
+        else:
+            print "You need to specify a revision to build the binary from."
 
     if options.single:
         if options.run:

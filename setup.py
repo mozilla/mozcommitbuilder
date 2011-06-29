@@ -2,12 +2,13 @@ from setuptools import setup, find_packages
 #from distutils.core import setup
 #from setuptools import setup, find_packages
 setup(name='mozcommitbuilder',
-      packages=['mozcommitbuilder'],
-      version='0.3.7',
+      version='0.4.0',
       description ="""Regression finder using Mozilla central repo""",
       author="Sam Liu",
       author_email="sam@ambushnetworks.com",
-      url='http://github.com/samliu/moz-commitbuilder',
+      url='http://github.com/samliu/mozcommitbuilder',
+      license='MPL 1.1/GPL 2.0/LGPL 2.1',
+      packages=find_packages(exclude=['legacy']),
       entry_points="""
           [console_scripts]
           mozcommitbuilder = mozcommitbuilder:buildercli

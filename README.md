@@ -46,6 +46,14 @@ mozcommitbuilder -f -e --single=70168 -c 8
 #Instantiation
 from mozcommitbuilder import Builder
 commitBuilder = Builder()
+
+# Optional Constructor Params:
+1. makeCommand, default=["make","-f","client.mk","build"]
+2. cores, default=1
+3. mozconf, default=None (create our own)
+4. shellCacheDir, default=~/moz-commitbuilder-cache (where to instantiate the cache)
+5. repoURL, default=moz-central repository URL
+6. clean, default=False (make clean trunk)
 ```
 
 ```python
@@ -54,6 +62,18 @@ commitBuilder.getTrunk() # fetches a local trunk
 commitBuilder.getBinary("70168") # Builds binary from revision,
                                  # moves into the cache directory
                                  # returns the path to it
+```
+
+```python
+#Bisection:
+commitBuilder.bisect("goodchangesetRev","badchangesetRev") # Interactive bisection
+```
+
+```python
+#Building and running:
+commitBuilder.build(changeset="70168") # Build only
+commitBuilder.run() # Run. Warning: ungraceful failure if build hasn't happened yet.
+commitBuilder.buildAndRun(changeset="70168") # Build rev and run
 ```
 
 ```python

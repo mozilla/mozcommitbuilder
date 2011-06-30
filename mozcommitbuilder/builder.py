@@ -50,13 +50,9 @@ from utils import hgId, captureStdout
 import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil,datetime
 import simplejson, urllib
 
-#from mercurial import commands, ui, hg
-
-
-
 #Global Variables
 showMakeData = 0
-progVersion="0.4.0"
+progVersion="0.4.1"
 
 class Builder():
     def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False, mozconf=None):
@@ -70,6 +66,10 @@ class Builder():
         self.repoPath = os.path.join(shellCacheDir,"mozbuild-trunk")
         self.hgPrefix = ['hg', '-R', self.repoPath]
         self.mozconf = mozconf
+        self.objdir = os.path.join(self.repoPath,"obj-ff-dbg")
+
+        self.mochitest = os.path.join(self.objdir,"_tests","testing","mochitest","tests")
+        self.mochitest_tmp = os.path.join(self.objdir,"_tests","testing","mochitest","tests","commitbuilder")
         #self.ui = ui.ui()
         #self.hgrepo = hg.repository(self.ui, self.repoPath)
         #To use hg-python, you do: commands.MYCMDNAME(self.ui, self.repo, {args})
@@ -78,6 +78,10 @@ class Builder():
             os.mkdir(shellCacheDir)
         if not os.path.exists(self.confDir):
             os.mkdir(self.confDir)
+        if not os.path.exists(self.mochitest_tmp):
+            os.mkdir(self.mochitest_tmp)
+            print self.mochitest_tmp
+            print "created!"
 
         #Sanity check: make sure hg is installed on the system, otherwise do not proceed!
         try:
@@ -165,6 +169,7 @@ class Builder():
     def mozconfigure(self):
         #Set mozconfig settings
         #See if we are told to use an externally customized one
+        print "\nConfiguring mozconfig:"
         if self.mozconf:
             os.environ['MOZCONFIG']=self.mozconf
             return
@@ -180,10 +185,11 @@ class Builder():
 
         #HACK :/
         if sys.platform == "win32" or sys.platform == "cygwin":
+            print "Windows detected, compiling with 1 core."
             f.write("ac_add_options --with-windows-version=600\n")
             f.write("ac_add_options --enable-application=browser\n")
         else:
-            print "Compiling with "+str(self.cores)+ " cores."
+            print "Compiling with "+str(self.cores)+ " cores.\n"
             f.write('mk_add_options MOZ_MAKE_FLAGS="-s -j '+str(self.cores)+'"')
 
         f.close()
@@ -191,7 +197,8 @@ class Builder():
         #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
         os.environ['MOZCONFIG']=self.confDir+"/config-default"
 
-    def bisect(self,good,bad):
+    def bisect(self,good,bad, testfile=None, testpath=None):
+        #testfile is an external file, testpath is an actual mochitest
         #Call hg bisect with initial params, set up building environment (mozconfig)
         good = hgId(good, self.hgPrefix)
         bad = hgId(bad, self.hgPrefix)
@@ -204,17 +211,65 @@ class Builder():
             #Prebuild stuff here!!
 
             self.mozconfigure()
-            self.bisectRecurse()
+            self.bisectRecurse(testfile=testfile, testpath=testpath)
         else:
             print "Invalid values. Please check your changeset revision numbers."
 
-    def bisectRecurse(self):
+    def bisectRecurse(self, testfile=None, testpath=None):
         #Recursively build, run, and prompt
-        self.buildAndRun()
-
         verdict = ""
-        while verdict != 'good' and verdict != 'bad' and verdict != 'b' and verdict != 'g':
-            verdict = raw_input("Was this commit good or bad? (type 'good' or 'bad' and press Enter): ")
+
+        #Decide whether to do interfactive prompt or use external test
+        if testfile==None and testpath==None:
+            self.buildAndRun()
+        else:
+            #TODO UNCOMMENT LINE BELOW
+            self.build()
+            if testfile == None:
+                #Using External testfile
+                #1. Clear self.mochitest_tmp
+                try:
+                    shutil.rmtree(self.mochitest_tmp)
+                except:
+                    pass
+                #2. Move file from testpath to self.mochitest_tmp
+                try:
+                    os.mkdir(self.mochitest_tmp)
+                    dst =  os.path.join(self.mochitest_tmp,"test_bug999999.html")
+                    subprocess.call(['touch',dst])
+                    print "copy " + str(testpath) + " to " +dst
+                    shutil.copy(str(testpath),dst)
+                except:
+                    print "Unable to generate test path, quitting. Is your inputted test a valid mochitest?"
+                    quit()
+                #3. Make mochitest use the commitbuilder directory.
+                testfile="commitbuilder"
+
+            #DEBUG
+            #testfile = "content/base/test/test_CrossSiteXHR.html"
+
+            print "Trying testfile "+str(testfile)
+            #TODO:
+            # 1. Copy relevant test to a directory of my choice
+
+
+            #sts = os.system("TEST_PATH="+testpath+" EXTRA_TEST_ARGS='--close-when-done' make -C " +self.objdir+ " mochitest-plain")
+            sts = subprocess.call(['make','-C',self.objdir,'mochitest-plain'],stdout=open('/dev/null','w'),env={'TEST_PATH': testfile, 'EXTRA_TEST_ARGS':"--close-when-done"})
+            shutil.rmtree(self.mochitest_tmp) #cleanup
+            if sts != 0:
+                verdict = "bad"
+                print "============================"
+                print "Verdict: FAILED test, bad changeset detected!"
+                print "============================"
+            else:
+                verdict = "good"
+                print "============================"
+                print "Verdict: PASSED test, good changeset detected!"
+                print "============================"
+
+        if verdict != 'good' and verdict !='bad':
+            while verdict != 'good' and verdict != 'bad' and verdict != 'b' and verdict != 'g':
+                verdict = raw_input("Was this commit good or bad? (type 'good' or 'bad' and press Enter): ")
 
         #do hg bisect --good or --bad depending on whether it's good or bad
         retval = 0;
@@ -234,7 +289,7 @@ class Builder():
             print "Something went wrong! :("
             quit()
 
-        self.bisectRecurse()
+        self.bisectRecurse(testfile=testfile, testpath=testpath)
 
     def buildAndRun(self, changeset=0):
         #API convenience function
@@ -370,19 +425,36 @@ def cli():
     group3.add_option("-e", "--run", action="store_true", dest="run", default=False,
                                         help="run the current build -- only works if already built")
 
+    group4 = OptionGroup(parser, "Binary building options",
+                                        "These are options for building binaries from a single changeset")
 
-    group4 = OptionGroup(parser, "Unstable Options",
+    group4.add_option("-x", "--binary", action="store_true", dest="binary", default=False,
+                                        help="build binary and return path to it")
+
+    group4.add_option("-q", "--revision", dest="revision", default=None, metavar="[changeset]",
+                                        help="revision number for single changeset to build binary from")
+
+    group5 = OptionGroup(parser, "Automatic Testing Options (EXPERIMENTAL)",
+                                        "Options for using an automated test instead of interactive prompting for bisection")
+
+    group5.add_option("-t", "--testfile", dest="testfile", default=None, metavar="content/base/test",
+                                        help="relative path of test directory in mochitest")
+
+    group5.add_option("-w", "--exttest", dest="testpath", default=None, metavar="~/Desktop/mytest.html",
+                                        help="absolute path to your own test file")
+
+    group6 = OptionGroup(parser, "Unstable Options",
                                         "Caution: use these options at your own risk.  "
                                         "They aren't recommended.")
 
-    group4.add_option("-r", "--repo", dest="repoURL",
+    group6.add_option("-r", "--repo", dest="repoURL",
                                         help="alternative mercurial repo to bisect",
                                         metavar="valid repository url")
 
     #group.add_option("-m", "--altmake", dest="alternateMake",
     #                                    help="alternative make command for building",
     #                                    metavar="make command, in quotes")
-    group4.add_option("-m", "--mozconfig", dest="mozconf",
+    group6.add_option("-m", "--mozconfig", dest="mozconf",
                                         help="external mozconfig if so desired",
                                         metavar="path_to_mozconfig", default=False)
 
@@ -390,6 +462,8 @@ def cli():
     parser.add_option_group(group2)
     parser.add_option_group(group3)
     parser.add_option_group(group4)
+    parser.add_option_group(group5)
+    parser.add_option_group(group6)
     (options, args) = parser.parse_args()
 
     # If a user only wants to make clean or has supplied no options:
@@ -412,10 +486,11 @@ def cli():
 
     # TODO: Allow a user to build a binary from cli
     if options.binary:
-        if options.revision:
-            pass
-        else:
-            print "You need to specify a revision to build the binary from."
+        pass
+        #if options.revision:
+        #    pass
+        #else:
+        #    print "You need to specify a revision to build the binary from."
 
     # For building single commits:
     if options.single:
@@ -428,7 +503,7 @@ def cli():
 
     # For bisections:
     elif options.good and options.bad:
-        print "Begin interactive commit bisect!"
+        print "Begin interactive commit bisect!\n"
 
         if options.repoURL:
             commitBuilder.repoURL = options.repoURL
@@ -436,7 +511,7 @@ def cli():
         #if options.alternateMake:
         #    commitBuilder.makeCommand = shlex.split(options.alternateMake)
 
-        commitBuilder.bisect(options.good,options.bad)
+        commitBuilder.bisect(options.good,options.bad, testfile=options.testfile, testpath=options.testpath)
 
     # Should not get here.
     else:

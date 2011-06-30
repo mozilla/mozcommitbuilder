@@ -49,6 +49,7 @@ from types import *
 from utils import hgId, captureStdout
 import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil,datetime
 import simplejson, urllib
+import ximport
 
 #Global Variables
 showMakeData = 0
@@ -56,7 +57,6 @@ progVersion="0.4.1"
 
 class Builder():
     def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False, mozconf=None):
-
         #Set variables that we need
         self.makeCommand = makeCommand
         self.shellCacheDir = shellCacheDir
@@ -146,7 +146,6 @@ class Builder():
 
     def getTrunk(self, makeClean=False):
         #Get local trunk
-
         #Delete old trunk if set to "clean" mode
         if makeClean:
             print "Making clean trunk environment..."
@@ -197,9 +196,9 @@ class Builder():
         #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
         os.environ['MOZCONFIG']=self.confDir+"/config-default"
 
-    def bisect(self,good,bad, testfile=None, testpath=None):
-        #testfile is an external file, testpath is an actual mochitest
+    def bisect(self,good,bad, testfile=None, testpath=None, testcondition=None, args_for_condition=None):
         #Call hg bisect with initial params, set up building environment (mozconfig)
+        #testfile is an external file, testpath is an actual mochitest
         good = hgId(good, self.hgPrefix)
         bad = hgId(bad, self.hgPrefix)
         if good and bad and self.validate(good, bad): #valid commit numbers, do the bisection!
@@ -215,13 +214,17 @@ class Builder():
         else:
             print "Invalid values. Please check your changeset revision numbers."
 
-    def bisectRecurse(self, testfile=None, testpath=None):
+    def bisectRecurse(self, testfile=None, testpath=None, testcondition=None, args_for_condition=[]):
         #Recursively build, run, and prompt
         verdict = ""
 
-        #Decide whether to do interfactive prompt or use external test
-        if testfile==None and testpath==None:
+        if testfile==None and testpath==None and testcondition==None:
+            #Not using a test, interactive bisect begin!
             self.buildAndRun()
+        elif testcondition != None:
+            #Using Jesse's idea: import any testing script and run it as the truth condition
+            conditionscript = ximport.importRelativeOrAbsolute(testcondition)
+            verdict = conditionscript.interesting([self.objdir] + args_for_condition)
         else:
             #TODO UNCOMMENT LINE BELOW
             self.build()
@@ -289,7 +292,7 @@ class Builder():
             print "Something went wrong! :("
             quit()
 
-        self.bisectRecurse(testfile=testfile, testpath=testpath)
+        self.bisectRecurse(testfile=testfile, testpath=testpath, testcondition=testcondition, args_for_condition=args_for_condition)
 
     def buildAndRun(self, changeset=0):
         #API convenience function
@@ -398,9 +401,11 @@ def cli():
             """
 
     parser = OptionParser(usage=usage,version="%prog "+progVersion)
+    parser.disable_interspersed_args()
+
     group1 = OptionGroup(parser, "Global Options",
                                         "")
-    group1.add_option("-c", "--cores", dest="cores",
+    group1.add_option("-j", "--cores", dest="cores",
                                         help="Number of cores to compile with",
                                         metavar="[numcores]")
     group1.add_option("-f", "--freshtrunk", action = "store_true", dest="makeClean", default=False,
@@ -443,6 +448,9 @@ def cli():
     group5.add_option("-w", "--exttest", dest="testpath", default=None, metavar="~/Desktop/mytest.html",
                                         help="absolute path to your own test file")
 
+    group5.add_option("-c", "--condition", dest="condition", default=None, metavar="[cond.py -opt1 -opt2]",
+                                        help="external condition for bisecting: MAKE THIS LAST OPTION")
+
     group6 = OptionGroup(parser, "Unstable Options",
                                         "Caution: use these options at your own risk.  "
                                         "They aren't recommended.")
@@ -464,7 +472,7 @@ def cli():
     parser.add_option_group(group4)
     parser.add_option_group(group5)
     parser.add_option_group(group6)
-    (options, args) = parser.parse_args()
+    (options, args_for_condition) = parser.parse_args()
 
     # If a user only wants to make clean or has supplied no options:
     if (not options.good or not options.bad) and not options.single:
@@ -511,7 +519,7 @@ def cli():
         #if options.alternateMake:
         #    commitBuilder.makeCommand = shlex.split(options.alternateMake)
 
-        commitBuilder.bisect(options.good,options.bad, testfile=options.testfile, testpath=options.testpath)
+        commitBuilder.bisect(options.good,options.bad, testfile=options.testfile, testpath=options.testpath, testcondition=options.condition, args_for_condition=args_for_condition)
 
     # Should not get here.
     else:

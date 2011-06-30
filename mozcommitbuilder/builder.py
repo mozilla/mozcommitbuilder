@@ -79,8 +79,8 @@ class Builder():
             os.mkdir(shellCacheDir)
         if not os.path.exists(self.confDir):
             os.mkdir(self.confDir)
-        if not os.path.exists(self.mochitest_tmp):
-            os.mkdir(self.mochitest_tmp)
+        #if not os.path.exists(self.mochitest_tmp):
+        #    os.mkdir(self.mochitest_tmp)
             print self.mochitest_tmp
             print "created!"
 
@@ -213,7 +213,7 @@ class Builder():
             #Prebuild stuff here!!
 
             self.mozconfigure()
-            self.bisectRecurse(testfile=testfile, testpath=testpath)
+            self.bisectRecurse(testfile=testfile, testpath=testpath, testcondition=testcondition, args_for_condition=args_for_condition)
         else:
             print "Invalid values. Please check your changeset revision numbers."
 
@@ -324,7 +324,7 @@ class Builder():
     def run(self):
         #Run the built binary if it exists. ONLY WORKS IF BUILD WAS CALLED!
         if sys.platform == "darwin":
-            runner = FirefoxRunner(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","Nightly.app","Contents","MacOS")+"/firefox-bin")
+            runner = FirefoxRunner(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","NightlyDebug.app","Contents","MacOS")+"/firefox-bin")
             runner.start()
             runner.wait()
         elif sys.platform == "linux2":

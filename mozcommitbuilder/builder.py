@@ -182,6 +182,8 @@ class Builder():
         f=open('config-default', 'w')
         #Ensure we know where to find our built stuff by using a custom mozconfig
         f.write('mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg\n')
+        f.write('ac_add_options --disable-optimize\n')
+        f.write('ac_add_options --enable-debug\n')
 
         #HACK :/
         if sys.platform == "win32" or sys.platform == "cygwin":

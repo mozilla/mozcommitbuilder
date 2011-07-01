@@ -46,11 +46,12 @@ Known Issues:
 from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
 from mozrunner import Runner, FirefoxRunner
 from mozrunner import FirefoxProfile
+import simplejson, urllib
+import ximport
+
 from types import *
 from utils import hgId, captureStdout
 import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil,datetime
-import simplejson, urllib
-import ximport
 
 #Global Variables
 showMakeData = 0
@@ -81,8 +82,8 @@ class Builder():
             os.mkdir(self.confDir)
         #if not os.path.exists(self.mochitest_tmp):
         #    os.mkdir(self.mochitest_tmp)
-            print self.mochitest_tmp
-            print "created!"
+        #    print self.mochitest_tmp
+        #    print "created!"
 
         #Sanity check: make sure hg is installed on the system, otherwise do not proceed!
         try:
@@ -184,6 +185,7 @@ class Builder():
         f.write('mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg\n')
         f.write('ac_add_options --disable-optimize\n')
         f.write('ac_add_options --enable-debug\n')
+        f.write('ac_add_options --enable-tests\n')
 
         #HACK :/
         if sys.platform == "win32" or sys.platform == "cygwin":
@@ -226,8 +228,19 @@ class Builder():
             self.buildAndRun()
         elif testcondition != None:
             #Using Jesse's idea: import any testing script and run it as the truth condition
+            #self.build()
             conditionscript = ximport.importRelativeOrAbsolute(testcondition)
-            verdict = conditionscript.interesting([self.objdir] + args_for_condition)
+            args_to_pass = [self.objdir] + args_for_condition
+            conditionscript.init(args_to_pass)
+
+            #TODO: refactor to use directories with revision numbers
+            tmpdir = tempfile.mkdtemp()
+
+            #If conditionscript is true, that means there was a bug.
+            #If conditionscript is false, that means the bug is not present.
+            verdict = conditionscript.interesting(args_to_pass,tmpdir)
+            verdict = "bad" if verdict else "good"
+
         else:
             #TODO UNCOMMENT LINE BELOW
             self.build()
@@ -445,16 +458,11 @@ def cli():
     group5 = OptionGroup(parser, "Automatic Testing Options (EXPERIMENTAL)",
                                         "Options for using an automated test instead of interactive prompting for bisection")
 
-    group5.add_option("-t", "--testfile", dest="testfile", default=None, metavar="content/base/test",
-                                        help="relative path of test directory in mochitest")
-
-    group5.add_option("-w", "--exttest", dest="testpath", default=None, metavar="~/Desktop/mytest.html",
-                                        help="absolute path to your own test file")
 
     group5.add_option("-c", "--condition", dest="condition", default=None, metavar="[cond.py -opt1 -opt2]",
                                         help="external condition for bisecting: MAKE THIS LAST OPTION")
 
-    group6 = OptionGroup(parser, "Unstable Options",
+    group6 = OptionGroup(parser, "Broken and Unstable Options",
                                         "Caution: use these options at your own risk.  "
                                         "They aren't recommended.")
 
@@ -468,6 +476,12 @@ def cli():
     group6.add_option("-m", "--mozconfig", dest="mozconf",
                                         help="external mozconfig if so desired",
                                         metavar="path_to_mozconfig", default=False)
+
+    group6.add_option("-t", "--testfile", dest="testfile", default=None, metavar="content/base/test",
+                                        help="relative path of test directory in mochitest")
+
+    group6.add_option("-w", "--exttest", dest="testpath", default=None, metavar="~/Desktop/mytest.html",
+                                        help="absolute path to your own test file")
 
     parser.add_option_group(group1)
     parser.add_option_group(group2)

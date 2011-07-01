@@ -228,7 +228,7 @@ class Builder():
             self.buildAndRun()
         elif testcondition != None:
             #Using Jesse's idea: import any testing script and run it as the truth condition
-            #self.build()
+            self.build()
             conditionscript = ximport.importRelativeOrAbsolute(testcondition)
             args_to_pass = [self.objdir] + args_for_condition
             conditionscript.init(args_to_pass)

@@ -51,7 +51,7 @@ import ximport
 
 from types import *
 from utils import hgId, captureStdout
-import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil,datetime
+import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil, datetime, multiprocessing
 
 #Global Variables
 showMakeData = 0
@@ -411,6 +411,12 @@ class Builder():
             return False
         return True
 
+def cpuCount():
+    try:
+        return multiprocessing.cpu_count()
+    except NotImplementedError:
+        return 1
+
 def cli():
     #Command line interface
     usage = """usage: %prog --good=[changeset] --bad=[changeset] [options] \n       %prog --single=[changeset] -e
@@ -421,9 +427,9 @@ def cli():
 
     group1 = OptionGroup(parser, "Global Options",
                                         "")
-    group1.add_option("-j", "--cores", dest="cores",
-                                        help="Number of cores to compile with",
-                                        metavar="[numcores]")
+    group1.add_option("-j", "--cores", dest="cores", default=cpuCount(),
+                                        help="Max simultaneous make jobs (default: %default, the number of cores on this system)",
+                                        metavar="[numjobs]")
     group1.add_option("-f", "--freshtrunk", action = "store_true", dest="makeClean", default=False,
                                         help="Delete old trunk and use a fresh one")
 

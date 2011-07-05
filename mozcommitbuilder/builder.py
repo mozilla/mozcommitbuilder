@@ -41,6 +41,11 @@
 '''
 Known Issues:
     1) Multi-core compilation on Windows not supported
+    2) Won't work on Windows 2000 or windows where home directory
+       has spaces -- if we use ~ the build command will fail.
+
+Current Goals:
+    1) Get
 '''
 
 from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
@@ -70,20 +75,10 @@ class Builder():
         self.mozconf = mozconf
         self.objdir = os.path.join(self.repoPath,"obj-ff-dbg")
 
-        #self.mochitest = os.path.join(self.objdir,"_tests","testing","mochitest","tests")
-        #self.mochitest_tmp = os.path.join(self.objdir,"_tests","testing","mochitest","tests","commitbuilder")
-        #self.ui = ui.ui()
-        #self.hgrepo = hg.repository(self.ui, self.repoPath)
-        #To use hg-python, you do: commands.MYCMDNAME(self.ui, self.repo, {args})
-
         if not os.path.exists(shellCacheDir):
             os.mkdir(shellCacheDir)
         if not os.path.exists(self.confDir):
             os.mkdir(self.confDir)
-        #if not os.path.exists(self.mochitest_tmp):
-        #    os.mkdir(self.mochitest_tmp)
-        #    print self.mochitest_tmp
-        #    print "created!"
 
         #Sanity check: make sure hg is installed on the system, otherwise do not proceed!
         try:
@@ -121,7 +116,8 @@ class Builder():
         return str(nextDate)
 
     def changesetFromDay(self, date, oldest=True):
-        #Gets first changeset from a given date
+        # Gets first changeset from a given date
+        # NOTE: USES PUSHLOG
         nextDate = self.increment_day(date)
         pushlog_url = "http://hg.mozilla.org/mozilla-central/json-pushes?startdate="+date+"&enddate="+nextDate
         pushlog_json = simplejson.load(urllib.urlopen(pushlog_url))
@@ -201,9 +197,20 @@ class Builder():
         #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
         os.environ['MOZCONFIG']=mozconfig_path
 
-    def bisect(self,good,bad, testfile=None, testpath=None, testcondition=None, args_for_condition=None):
+    def bisect(self,good,bad, testcondition=None, args_for_condition=None):
         #Call hg bisect with initial params, set up building environment (mozconfig)
         #testfile is an external file, testpath is an actual mochitest
+
+        #Support for using dates
+        #EXPERIMENTAL
+        badDate = re.search(r'(\d\d\d\d-\d\d-\d\d)',good)
+        goodDate = re.search(r'(\d\d\d\d-\d\d-\d\d)',bad)
+        if badDate != None and goodDate != None:
+            badDate = badDate.group(1)
+            goodDate = goodDate.group(1)
+            good = self.changesetFromDay(goodDate) #Get first changeset from this day
+            bad = self.changesetFromDay(badDate, oldest=False) #Get last changeset from that day
+
         good = hgId(good, self.hgPrefix)
         bad = hgId(bad, self.hgPrefix)
         if good and bad and self.validate(good, bad): #valid commit numbers, do the bisection!
@@ -217,10 +224,11 @@ class Builder():
             print str(setBad)
             print str(setGood)
 
-            # Check if we should terminate early (ancestor problem)
+            # Check if we should terminate early because the bisector exited?
             string_to_parse = str(setGood)
             traceback_flag = string_to_parse.find("Not all ancestors")
             if traceback_flag > -1:
+                #TODO: Bisect from ancestor changeset rather than exiting early
                 quit()
             traceback_flag = string_to_parse.find("The first bad revision is")
             if traceback_flag > -1:
@@ -229,16 +237,16 @@ class Builder():
             # Set mozconfig
             # Call recursive bisection!
             self.mozconfigure()
-            self.bisectRecurse(testfile=testfile, testpath=testpath, testcondition=testcondition, args_for_condition=args_for_condition)
+            self.bisectRecurse(testcondition=testcondition, args_for_condition=args_for_condition)
 
         else:
             print "Invalid values. Please check your changeset revision numbers."
 
-    def bisectRecurse(self, testfile=None, testpath=None, testcondition=None, args_for_condition=[]):
+    def bisectRecurse(self, testcondition=None, args_for_condition=[]):
         #Recursively build, run, and prompt
         verdict = ""
 
-        if testfile==None and testpath==None and testcondition==None:
+        if testcondition==None:
             #Not using a test, interactive bisect begin!
             self.buildAndRun()
         elif testcondition != None:
@@ -283,7 +291,7 @@ class Builder():
             print "Something went wrong! :("
             quit()
 
-        self.bisectRecurse(testfile=testfile, testpath=testpath, testcondition=testcondition, args_for_condition=args_for_condition)
+        self.bisectRecurse(testcondition=testcondition, args_for_condition=args_for_condition)
 
     def buildAndRun(self, changeset=0):
         #API convenience function
@@ -409,13 +417,14 @@ def cli():
                                         help="Delete old trunk and use a fresh one")
 
     group2 = OptionGroup(parser, "Bisector Options",
-                                        "These are options for bisecting on changesets")
+                                        "These are options for bisecting on changesets. Dates are retrieved from pushlog " \
+                                        "and are not as reliable as exact changeset numbers.")
     group2.add_option("-g", "--good", dest="good",
                                         help="Last known good revision",
-                                        metavar="[changeset]")
+                                        metavar="[changeset or date]")
     group2.add_option("-b", "--bad", dest="bad",
                                         help="Broken commit revision",
-                                        metavar="[changeset]")
+                                        metavar="[changeset or date]")
 
     group3 = OptionGroup(parser, "Single Changeset Options",
                                         "These are options for building a single changeset")
@@ -441,7 +450,7 @@ def cli():
                                         "Please read documentation on how to write testing functions for this script.")
 
 
-    group5.add_option("-c", "--condition", dest="condition", default=None, metavar="[cond.py -opt1 -opt2]",
+    group5.add_option("-c", "--condition", dest="condition", default=None, metavar="[condtest.py -opt1 -opt2]",
                                         help="External condition for bisecting. " \
                                              "Note: THIS MUST BE THE LAST OPTION CALLED.")
 
@@ -450,21 +459,12 @@ def cli():
                                         "They aren't recommended.")
 
     group6.add_option("-r", "--repo", dest="repoURL",
-                                        help="alternative mercurial repo to bisect",
+                                        help="alternative mercurial repo to bisect NOTE: NEVER BEEN TESTED",
                                         metavar="valid repository url")
 
-    #group.add_option("-m", "--altmake", dest="alternateMake",
-    #                                    help="alternative make command for building",
-    #                                    metavar="make command, in quotes")
     group6.add_option("-m", "--mozconfig", dest="mozconf",
-                                        help="external mozconfig if so desired",
+                                        help="external mozconfig if so desired NOTE: BROKEN RIGHT NOW",
                                         metavar="path_to_mozconfig", default=False)
-
-    group6.add_option("-t", "--testfile", dest="testfile", default=None, metavar="content/base/test",
-                                        help="relative path of test directory in mochitest")
-
-    group6.add_option("-w", "--exttest", dest="testpath", default=None, metavar="~/Desktop/mytest.html",
-                                        help="absolute path to your own test file")
 
     parser.add_option_group(group1)
     parser.add_option_group(group2)
@@ -524,14 +524,7 @@ def cli():
         if options.condition:
             conditionscript = ximport.importRelativeOrAbsolute(options.condition)
 
-            #Didn't want to catch the exception because then we don't see errors thrown by the import.
-            #try:
-            #    conditionscript = ximport.importRelativeOrAbsolute(options.condition)
-            #except:
-            #    print "Failed to import condition script!"
-            #    quit()
-
-        commitBuilder.bisect(options.good,options.bad, testfile=options.testfile, testpath=options.testpath, testcondition=conditionscript, args_for_condition=args_for_condition)
+        commitBuilder.bisect(options.good,options.bad, testcondition=conditionscript, args_for_condition=args_for_condition)
 
     # Should not get here.
     else:

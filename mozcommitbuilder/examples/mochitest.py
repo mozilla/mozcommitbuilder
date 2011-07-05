@@ -29,21 +29,20 @@ def interesting(args, tmpdir):
 
     testpath = os.path.expanduser(str(args[1]))
 
-    #print "using "+str(testpath)
-    #print "args: " + str(args)
-
-    # Based on commitbuilder's trunk params, doesn't account for custom params!
     objdir = args[0]
-    default_objdir = os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache","mozbuild-trunk","obj-ff-dbg")
-    mochitest_tmp = os.path.join(default_objdir,"_tests","testing","mochitest","tests","commitbuilder")
+
+    # I'm going to create a new directory inside the tests directory
+    # This will allow me to copy my mochitest into it and run it
+    # A bug prevents auto-shutdown of firefox when you run single tests outside of a directory.
+    mochitest_tmp = os.path.join(objdir,"_tests","testing","mochitest","tests","commitbuilder")
 
     # 1. Remove old temporary directory tree
     try:
-        shutil.rmtree(self.mochitest_tmp)
+        shutil.rmtree(mochitest_tmp)
     except:
         pass
 
-    # 2. Move file from testpath to self.mochitest_tmp
+    # 2. Move file from testpath to mochitest_tmp
     try:
         os.mkdir(mochitest_tmp)
         dst =  os.path.join(mochitest_tmp,"test_bug999999.html")
@@ -62,7 +61,7 @@ def interesting(args, tmpdir):
     #testfile = "content/base/test/test_CrossSiteXHR.html"
 
     print "Trying testfile "+str(testfile)
-    sts = subprocess.call(['make','-C',default_objdir,'mochitest-plain'],stdout=open('/dev/null','w'),env={'TEST_PATH': testfile, 'EXTRA_TEST_ARGS':"--close-when-done"})
+    sts = subprocess.call(['make','-C',objdir,'mochitest-plain'],stdout=open('/dev/null','w'),env={'TEST_PATH': testfile, 'EXTRA_TEST_ARGS':"--close-when-done"})
     shutil.rmtree(mochitest_tmp) #cleanup
     if sts != 0:
         print "============================"

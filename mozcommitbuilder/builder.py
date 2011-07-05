@@ -70,8 +70,8 @@ class Builder():
         self.mozconf = mozconf
         self.objdir = os.path.join(self.repoPath,"obj-ff-dbg")
 
-        self.mochitest = os.path.join(self.objdir,"_tests","testing","mochitest","tests")
-        self.mochitest_tmp = os.path.join(self.objdir,"_tests","testing","mochitest","tests","commitbuilder")
+        #self.mochitest = os.path.join(self.objdir,"_tests","testing","mochitest","tests")
+        #self.mochitest_tmp = os.path.join(self.objdir,"_tests","testing","mochitest","tests","commitbuilder")
         #self.ui = ui.ui()
         #self.hgrepo = hg.repository(self.ui, self.repoPath)
         #To use hg-python, you do: commands.MYCMDNAME(self.ui, self.repo, {args})
@@ -208,14 +208,29 @@ class Builder():
         bad = hgId(bad, self.hgPrefix)
         if good and bad and self.validate(good, bad): #valid commit numbers, do the bisection!
             subprocess.call(self.hgPrefix+["bisect","--reset"])
-            subprocess.call(self.hgPrefix+["up",bad])
-            subprocess.call(self.hgPrefix+["bisect","--bad"])
-            subprocess.call(self.hgPrefix+["bisect","--good",good])
 
-            #Prebuild stuff here!!
+            setUpdate = captureStdout(self.hgPrefix+["up",bad])
+            setBad = captureStdout(self.hgPrefix+["bisect","--bad"])
+            setGood = captureStdout(self.hgPrefix+["bisect","--good",good])
 
+            print str(setUpdate)
+            print str(setBad)
+            print str(setGood)
+
+            # Check if we should terminate early (ancestor problem)
+            string_to_parse = str(setGood)
+            traceback_flag = string_to_parse.find("Not all ancestors")
+            if traceback_flag > -1:
+                quit()
+            traceback_flag = string_to_parse.find("The first bad revision is")
+            if traceback_flag > -1:
+                quit()
+
+            # Set mozconfig
+            # Call recursive bisection!
             self.mozconfigure()
             self.bisectRecurse(testfile=testfile, testpath=testpath, testcondition=testcondition, args_for_condition=args_for_condition)
+
         else:
             print "Invalid values. Please check your changeset revision numbers."
 
@@ -236,56 +251,11 @@ class Builder():
 
             #TODO: refactor to use directories with revision numbers
             tmpdir = tempfile.mkdtemp()
-
-            #If testcondition is true, that means there was a bug.
-            #If testcondition is false, that means the bug is not present.
             verdict = testcondition.interesting(args_to_pass,tmpdir)
-            verdict = "bad" if verdict else "good"
 
-        else:
-            #TODO UNCOMMENT LINE BELOW
-            self.build()
-            if testfile == None:
-                #Using External testfile
-                #1. Clear self.mochitest_tmp
-                try:
-                    shutil.rmtree(self.mochitest_tmp)
-                except:
-                    pass
-                #2. Move file from testpath to self.mochitest_tmp
-                try:
-                    os.mkdir(self.mochitest_tmp)
-                    dst =  os.path.join(self.mochitest_tmp,"test_bug999999.html")
-                    subprocess.call(['touch',dst])
-                    print "copy " + str(testpath) + " to " +dst
-                    shutil.copy(str(testpath),dst)
-                except:
-                    print "Unable to generate test path, quitting. Is your inputted test a valid mochitest?"
-                    quit()
-                #3. Make mochitest use the commitbuilder directory.
-                testfile="commitbuilder"
-
-            #DEBUG
-            #testfile = "content/base/test/test_CrossSiteXHR.html"
-
-            print "Trying testfile "+str(testfile)
-            #TODO:
-            # 1. Copy relevant test to a directory of my choice
-
-
-            #sts = os.system("TEST_PATH="+testpath+" EXTRA_TEST_ARGS='--close-when-done' make -C " +self.objdir+ " mochitest-plain")
-            sts = subprocess.call(['make','-C',self.objdir,'mochitest-plain'],stdout=open('/dev/null','w'),env={'TEST_PATH': testfile, 'EXTRA_TEST_ARGS':"--close-when-done"})
-            shutil.rmtree(self.mochitest_tmp) #cleanup
-            if sts != 0:
-                verdict = "bad"
-                print "============================"
-                print "Verdict: FAILED test, bad changeset detected!"
-                print "============================"
-            else:
-                verdict = "good"
-                print "============================"
-                print "Verdict: PASSED test, good changeset detected!"
-                print "============================"
+            #Allow user to return true/false or bad/good
+            if verdict != "bad" and verdict != "good":
+                verdict = "bad" if verdict else "good"
 
         if verdict != 'good' and verdict !='bad':
             while verdict != 'good' and verdict != 'bad' and verdict != 'b' and verdict != 'g':
@@ -299,6 +269,10 @@ class Builder():
             retval = captureStdout(self.hgPrefix+["bisect","--bad"])
 
         print str(retval)
+        string_to_parse = str(retval)
+        traceback_flag = string_to_parse.find("Not all ancestors")
+        if traceback_flag > -1:
+            print "You need to re-run the bisector again using the changeset they give you."
 
         # HACK
         if retval[1] == 'h': #if retval starts with "the" then we can quit
@@ -463,12 +437,13 @@ def cli():
                                         help="revision number for single changeset to build binary from")
 
     group5 = OptionGroup(parser, "Automatic Testing Options (EXPERIMENTAL)",
-                                        "Options for using an automated test instead of interactive prompting for bisection.
-                                         Please read documentation on how to write testing functions for this script.")
+                                        "Options for using an automated test instead of interactive prompting for bisection. " \
+                                        "Please read documentation on how to write testing functions for this script.")
 
 
     group5.add_option("-c", "--condition", dest="condition", default=None, metavar="[cond.py -opt1 -opt2]",
-                                        help="external condition for bisecting: MAKE THIS LAST OPTION")
+                                        help="External condition for bisecting. " \
+                                             "Note: THIS MUST BE THE LAST OPTION CALLED.")
 
     group6 = OptionGroup(parser, "Broken and Unstable Options",
                                         "Caution: use these options at your own risk.  "
@@ -502,9 +477,11 @@ def cli():
     # If a user only wants to make clean or has supplied no options:
     if (not options.good or not options.bad) and not options.single:
         if options.makeClean:
-            #Make a clean trunk
+            #Make a clean trunk and quit.
             commitBuilder = Builder(clean=options.makeClean)
         else:
+            # Not enough relevant parameters were given
+            # Print a help message and quit.
             print """Use -h flag for available options."""
             print """To bisect, you must specify both a good and a bad date. (-g and -b flags are not optional)."""
             print """You can also use the --single=[chset] flag to build and --run to run a single changeset."""
@@ -545,6 +522,7 @@ def cli():
         #    commitBuilder.makeCommand = shlex.split(options.alternateMake)
 
         if options.condition:
+            conditionscript = ximport.importRelativeOrAbsolute(options.condition)
             try:
                 conditionscript = ximport.importRelativeOrAbsolute(options.condition)
             except:

@@ -260,12 +260,18 @@ class Builder():
         #Recursively build, run, and prompt
         verdict = ""
 
-        if testcondition==None:
-            #Not using a test, interactive bisect begin!
-            self.buildAndRun()
-        elif testcondition != None:
-            #Using Jesse's idea: import any testing script and run it as the truth condition
+        try:
             self.build()
+        except Exception:
+            verdict = "skip"
+
+        if verdict == "skip":
+            pass
+        elif testcondition==None:
+            #Not using a test, interactive bisect begin!
+            self.run()
+        else:
+            #Using Jesse's idea: import any testing script and run it as the truth condition
             args_to_pass = [self.objdir] + args_for_condition
 
             if hasattr(testcondition, "init"):
@@ -279,16 +285,19 @@ class Builder():
             if verdict != "bad" and verdict != "good":
                 verdict = "bad" if verdict else "good"
 
-        if verdict != 'good' and verdict !='bad':
-            while verdict != 'good' and verdict != 'bad' and verdict != 'b' and verdict != 'g':
-                verdict = raw_input("Was this commit good or bad? (type 'good' or 'bad' and press Enter): ")
+        while verdict not in ["good", "bad", "skip"]:
+            verdict = raw_input("Was this commit good or bad? (type 'good', 'bad', or 'skip'): ")
+            if verdict == 'g':
+                verdict = "good"
+            if verdict == 'b':
+                verdict = "bad"
+            if verdict == 's':
+                verdict = "skip"
 
-        #do hg bisect --good or --bad depending on whether it's good or bad
-        retval = 0;
-        if verdict == 'good':
-            retval = captureStdout(self.hgPrefix+["bisect","--good"])
-        else:
-            retval = captureStdout(self.hgPrefix+["bisect","--bad"])
+        # do hg bisect --good, --bad, or --skip
+        verdictCommand = self.hgPrefix+["bisect","--"+verdict]
+        print " ".join(verdictCommand)
+        retval = captureStdout(verdictCommand)
 
         print str(retval)
         string_to_parse = str(retval)

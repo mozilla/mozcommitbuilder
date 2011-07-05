@@ -176,11 +176,11 @@ class Builder():
             return
 
         #Make mozconfig
-        os.chdir(self.confDir)
-        if os.path.exists("config-default"):
-            os.unlink("config-default")
+        mozconfig_path = os.path.join(self.confDir, 'config-default')
+        if os.path.exists(mozconfig_path):
+            os.unlink(mozconfig_path)
 
-        f=open('config-default', 'w')
+        f=open(mozconfig_path, 'w')
         #Ensure we know where to find our built stuff by using a custom mozconfig
         f.write('mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg\n')
         f.write('ac_add_options --disable-optimize\n')
@@ -199,7 +199,7 @@ class Builder():
         f.close()
 
         #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
-        os.environ['MOZCONFIG']=self.confDir+"/config-default"
+        os.environ['MOZCONFIG']=mozconfig_path
 
     def bisect(self,good,bad, testfile=None, testpath=None, testcondition=None, args_for_condition=None):
         #Call hg bisect with initial params, set up building environment (mozconfig)

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 #from distutils.core import setup
 #from setuptools import setup, find_packages
 setup(name='mozcommitbuilder',
-      version='0.4.1',
+      version='0.4.4',
       description ="""Regression finder using Mozilla central repo""",
       author="Sam Liu",
       author_email="sam@ambushnetworks.com",
@@ -13,7 +13,7 @@ setup(name='mozcommitbuilder',
           [console_scripts]
           mozcommitbuilder = mozcommitbuilder:buildercli
         """,
-      install_requires = ['mozrunner >= 2.5.4', 'httplib2 >= 0.6.0'],
+      install_requires = ['mozrunner >= 2.5.4', 'httplib2 >= 0.6.0', 'simplejson'],
       classifiers=['Development Status :: 4 - Beta',
                    'Intended Audience :: Developers',
                    'Operating System :: OS Independent'

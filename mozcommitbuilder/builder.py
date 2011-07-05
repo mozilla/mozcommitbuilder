@@ -55,7 +55,7 @@ import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil, datetime,
 
 #Global Variables
 showMakeData = 0
-progVersion="0.4.1"
+progVersion="0.4.4"
 
 class Builder():
     def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False, mozconf=None):
@@ -229,16 +229,17 @@ class Builder():
         elif testcondition != None:
             #Using Jesse's idea: import any testing script and run it as the truth condition
             self.build()
-            conditionscript = ximport.importRelativeOrAbsolute(testcondition)
             args_to_pass = [self.objdir] + args_for_condition
-            conditionscript.init(args_to_pass)
+
+            if hasattr(testcondition, "init"):
+                testcondition.init(args_to_pass)
 
             #TODO: refactor to use directories with revision numbers
             tmpdir = tempfile.mkdtemp()
 
-            #If conditionscript is true, that means there was a bug.
-            #If conditionscript is false, that means the bug is not present.
-            verdict = conditionscript.interesting(args_to_pass,tmpdir)
+            #If testcondition is true, that means there was a bug.
+            #If testcondition is false, that means the bug is not present.
+            verdict = testcondition.interesting(args_to_pass,tmpdir)
             verdict = "bad" if verdict else "good"
 
         else:
@@ -462,7 +463,8 @@ def cli():
                                         help="revision number for single changeset to build binary from")
 
     group5 = OptionGroup(parser, "Automatic Testing Options (EXPERIMENTAL)",
-                                        "Options for using an automated test instead of interactive prompting for bisection")
+                                        "Options for using an automated test instead of interactive prompting for bisection.
+                                         Please read documentation on how to write testing functions for this script.")
 
 
     group5.add_option("-c", "--condition", dest="condition", default=None, metavar="[cond.py -opt1 -opt2]",
@@ -542,7 +544,14 @@ def cli():
         #if options.alternateMake:
         #    commitBuilder.makeCommand = shlex.split(options.alternateMake)
 
-        commitBuilder.bisect(options.good,options.bad, testfile=options.testfile, testpath=options.testpath, testcondition=options.condition, args_for_condition=args_for_condition)
+        if options.condition:
+            try:
+                conditionscript = ximport.importRelativeOrAbsolute(options.condition)
+            except:
+                print "Failed to import condition script!"
+                quit()
+
+        commitBuilder.bisect(options.good,options.bad, testfile=options.testfile, testpath=options.testpath, testcondition=conditionscript, args_for_condition=args_for_condition)
 
     # Should not get here.
     else:

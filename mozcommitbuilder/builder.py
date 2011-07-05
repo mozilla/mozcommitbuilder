@@ -197,7 +197,14 @@ class Builder():
         #export MOZCONFIG=/path/to/mozilla/mozconfig-firefox
         os.environ['MOZCONFIG']=mozconfig_path
 
-    def bisect(self,good,bad, testcondition=None, args_for_condition=None):
+    def importAndBisect(self, good, bad, testcondition=None, args_for_condition=[]):
+        #convenience function for API use only
+        conditionscript = ximport.importRelativeOrAbsolute(testcondition)
+        self.bisect(good,bad, testcondition=conditionscript, args_for_condition=args_for_condition)
+
+
+
+    def bisect(self,good,bad, testcondition=None, args_for_condition=[]):
         #Call hg bisect with initial params, set up building environment (mozconfig)
         #testfile is an external file, testpath is an actual mochitest
 

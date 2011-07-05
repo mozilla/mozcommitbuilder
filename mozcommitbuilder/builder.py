@@ -523,11 +523,13 @@ def cli():
 
         if options.condition:
             conditionscript = ximport.importRelativeOrAbsolute(options.condition)
-            try:
-                conditionscript = ximport.importRelativeOrAbsolute(options.condition)
-            except:
-                print "Failed to import condition script!"
-                quit()
+
+            #Didn't want to catch the exception because then we don't see errors thrown by the import.
+            #try:
+            #    conditionscript = ximport.importRelativeOrAbsolute(options.condition)
+            #except:
+            #    print "Failed to import condition script!"
+            #    quit()
 
         commitBuilder.bisect(options.good,options.bad, testfile=options.testfile, testpath=options.testpath, testcondition=conditionscript, args_for_condition=args_for_condition)
 

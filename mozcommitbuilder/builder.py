@@ -167,14 +167,20 @@ class Builder():
         #Set mozconfig settings
         #See if we are told to use an externally customized one
         print "\nConfiguring mozconfig:"
-        if self.mozconf:
-            os.environ['MOZCONFIG']=self.mozconf
-            return
-
         #Make mozconfig
         mozconfig_path = os.path.join(self.confDir, 'config-default')
         if os.path.exists(mozconfig_path):
             os.unlink(mozconfig_path)
+
+        if self.mozconf:
+            shutil.copy(self.mozconf,mozconfig_path)
+            f=open(mozconfig_path, 'a')
+            f.write('mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg\n')
+            if sys.platform != "win32" or sys.platform != "cygwin":
+                f.write('mk_add_options MOZ_MAKE_FLAGS="-s -j '+str(self.cores)+'"')
+            os.environ['MOZCONFIG']=mozconfig_path
+            return
+
 
         f=open(mozconfig_path, 'w')
         #Ensure we know where to find our built stuff by using a custom mozconfig
@@ -233,10 +239,11 @@ class Builder():
 
             # Check if we should terminate early because the bisector exited?
             string_to_parse = str(setGood)
-            traceback_flag = string_to_parse.find("Not all ancestors")
+            traceback_flag = string_to_parse.find("--extend")
             if traceback_flag > -1:
-                #TODO: Bisect from ancestor changeset rather than exiting early
-                quit()
+                #hg 1.9 and up only has --extend, which is branch aware
+                print "Using hg 1.9, we're branch aware! Let's explore that ancestor branch..."
+                subprocess.call(self.hgPrefix+["bisect","--extend"])
             traceback_flag = string_to_parse.find("The first bad revision is")
             if traceback_flag > -1:
                 quit()

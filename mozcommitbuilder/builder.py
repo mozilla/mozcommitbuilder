@@ -550,7 +550,6 @@ def cli():
         conditionscript = None
         if options.condition:
             conditionscript = ximport.importRelativeOrAbsolute(options.condition)
-                                                               /opt/local/Library/Frameworks/Python.framework/Versions/2.6/bin/mozcommitbuilder:5: UserWarning: Module pkg_resources was already imported from /opt/local/Library/Frameworks/Python.framework/Versions/2.6/lib/python2.6/site-packages/setuptools-0.6c11-py2.6.egg/pkg_resources.py, but /opt/local/Library/Frameworks/Python.framework/Versions/2.6/lib/python2.6/site-packages/distribute-0.6.16-py2.6.egg is being added to sys.path
         commitBuilder.bisect(options.good,options.bad, testcondition=conditionscript, args_for_condition=args_for_condition)
 
     # Should not get here.

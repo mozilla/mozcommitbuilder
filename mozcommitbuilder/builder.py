@@ -56,7 +56,7 @@ from time import gmtime, strftime
 
 #Global Variables
 showMakeData = 0
-progVersion="0.4.4"
+progVersion="0.4.5"
 
 class Builder():
     def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False, mozconf=None):
@@ -253,7 +253,7 @@ class Builder():
        # Check if we should terminate early because the bisector exited?
         string_to_parse = str(doneString)
         traceback_flag = string_to_parse.find("Not all ancestors")
-        
+
         traceback_flag = string_to_parse.find("--extend")
         if traceback_flag > -1:
             #hg 1.9 and up only has --extend, which is branch aware

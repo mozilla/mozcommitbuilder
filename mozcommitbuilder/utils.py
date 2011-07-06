@@ -42,7 +42,7 @@ import platform
 import os
 import subprocess
 
-def increment_day(self, date):
+def increment_day(date):
     #TODO: MOVE TO UTILS. Increments a date string.
     s = date.split("-")
     delta = datetime.timedelta(days=1)

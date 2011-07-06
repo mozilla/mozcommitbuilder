@@ -223,9 +223,6 @@ class Builder():
         #Get the actual changesets that we will be using
         good = hgId(good, self.hgPrefix)
         bad = hgId(bad, self.hgPrefix)
-        print good
-        print bad
-        print self.validate(good, bad)
 
         if good and bad and self.validate(good, bad):
             #Valid changesets, so do the bisection

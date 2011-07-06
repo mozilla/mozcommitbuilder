@@ -51,7 +51,7 @@ def increment_day(date):
 
 #Resolves names like "tip" and "52707" to the long stable hg hash ids
 def hgId(rev, hgPrefix):
-    return captureStdout(hgPrefix + ["id", "-i", "-r", rev],ignoreExitCode=True, ignoreStderr=True)
+    return captureStdout(hgPrefix + ["id", "-i", "-r", rev],ignoreExitCode=True)
 
 #Captures command line output into python string
 def captureStdout(cmd, ignoreStderr=False, combineStderr=False, ignoreExitCode=False, currWorkingDir=os.getcwdu()):

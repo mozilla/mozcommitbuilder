@@ -246,6 +246,7 @@ class Builder():
 
         else:
             print "Invalid values. Please check your changeset revision numbers."
+            print "If the problem persists, try running mozcommitbuilder with the -f flag."
 
 
     def check_done(self, doneString):

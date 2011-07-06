@@ -50,7 +50,7 @@ from mozrunner import Runner, FirefoxRunner
 import simplejson, urllib
 import ximport
 from types import *
-from utils import hgId, captureStdout
+from utils import hgId, captureStdout, increment_day
 import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil, datetime, multiprocessing
 from time import gmtime, strftime
 
@@ -103,13 +103,6 @@ class Builder():
             return changesetTip
         else:
             print "Couldn't get the tip changeset."
-
-    def increment_day(self, date):
-        #TODO: MOVE TO UTILS. Increments a date string.
-        s = date.split("-")
-        delta = datetime.timedelta(days=1)
-        nextDate = datetime.date(int(s[0]),int(s[1]),int(s[2])) + delta
-        return str(nextDate)
 
     def changesetFromDay(self, date, oldest=True):
         # Gets first changeset from a given date
@@ -209,7 +202,6 @@ class Builder():
         #testfile is an external file, testpath is an actual mochitest
 
         #Support for using dates
-        #EXPERIMENTAL
         badDate = re.search(r'(\d\d\d\d-\d\d-\d\d)',good)
         goodDate = re.search(r'(\d\d\d\d-\d\d-\d\d)',bad)
         if badDate != None and goodDate != None:
@@ -252,18 +244,20 @@ class Builder():
     def check_done(self, doneString):
        # Check if we should terminate early because the bisector exited?
         string_to_parse = str(doneString)
-        traceback_flag = string_to_parse.find("Not all ancestors")
 
+        branch_unaware_flag = string_to_parse.find("Not all ancestors")
         traceback_flag = string_to_parse.find("--extend")
+        regression_found = string_to_parse.find("The first")
+
         if traceback_flag > -1:
             #hg 1.9 and up only has --extend, which is branch aware
             print "Using hg 1.9, we're branch aware! Let's explore that ancestor branch..."
             subprocess.call(self.hgPrefix+["bisect","--extend"])
-        traceback_flag = string_to_parse.find("The first")
-        if traceback_flag > -1:
+        elif branch_unaware_flag > -1:
+            print "Not using hg 1.9 (not automatic) so you need to bisect again with the above changeset."
+        elif regression_found > -1:
             print "Regression found using mozcommitbuilder " + progVersion + " on " + sys.platform + " at " + strftime("%Y-%m-%d %H:%M:%S", gmtime())
             quit()
-
 
     def bisectRecurse(self, testcondition=None, args_for_condition=[]):
         #Recursively build, run, and prompt
@@ -312,19 +306,9 @@ class Builder():
         string_to_parse = str(retval)
         print string_to_parse
 
-        branch_aware_flag = string_to_parse.find("Not all ancestors")
-        bisect_extend_flag = string_to_parse.find("--extend")
-        if bisect_extend_flag > -1:
-            #hg 1.9 and up only has --extend, which is branch aware
-            print "Using hg 1.9, we're branch aware! Let's explore that ancestor branch..."
-            subprocess.call(self.hgPrefix+["bisect","--extend"])
-        elif branch_aware_flag > -1:
-            print "You need to re-run the bisector again using the changeset they give you."
+        self.check_done(string_to_parse)
 
-        if retval.startswith("The first"):
-
-            quit()
-        elif retval.startswith("Testing changeset"):
+        if retval.startswith("Testing changeset"):
             print "\n"
         else:
             print "Something went wrong! :("

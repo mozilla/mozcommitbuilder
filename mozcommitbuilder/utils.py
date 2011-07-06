@@ -42,6 +42,13 @@ import platform
 import os
 import subprocess
 
+def increment_day(self, date):
+    #TODO: MOVE TO UTILS. Increments a date string.
+    s = date.split("-")
+    delta = datetime.timedelta(days=1)
+    nextDate = datetime.date(int(s[0]),int(s[1]),int(s[2])) + delta
+    return str(nextDate)
+
 #Resolves names like "tip" and "52707" to the long stable hg hash ids
 def hgId(rev, hgPrefix):
     return captureStdout(hgPrefix + ["id", "-i", "-r", rev],ignoreExitCode=True, ignoreStderr=True)

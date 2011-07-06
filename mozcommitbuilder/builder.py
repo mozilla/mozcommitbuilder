@@ -71,6 +71,7 @@ class Builder():
         self.mozconf = mozconf
         self.objdir = os.path.join(self.repoPath,"obj-ff-dbg")
 
+        #Create directories we need
         if not os.path.exists(shellCacheDir):
             os.mkdir(shellCacheDir)
         if not os.path.exists(self.confDir):
@@ -99,14 +100,15 @@ class Builder():
         except:
             print "Woops, something went wrong!"
             quit()
+
+        #Ensure that changesetTip actually contains something
         if changesetTip:
             return changesetTip
         else:
             print "Couldn't get the tip changeset."
 
     def changesetFromDay(self, date, oldest=True):
-        # Gets first changeset from a given date
-        # NOTE: USES PUSHLOG
+        # Gets first changeset from a given date via pushlog
         nextDate = self.increment_day(date)
         pushlog_url = "http://hg.mozilla.org/mozilla-central/json-pushes?startdate="+date+"&enddate="+nextDate
         pushlog_json = simplejson.load(urllib.urlopen(pushlog_url))
@@ -132,8 +134,7 @@ class Builder():
         return False
 
     def getTrunk(self, makeClean=False):
-        #Get local trunk
-        #Delete old trunk if set to "clean" mode
+        #Get or update local trunk -- makeclean means delete old trunk and fetch fresh
         if makeClean:
             print "Making clean trunk environment..."
             try:
@@ -154,14 +155,17 @@ class Builder():
 
     def mozconfigure(self):
         #Set mozconfig settings
-        #See if we are told to use an externally customized one
         print "\nConfiguring mozconfig:"
-        #Make mozconfig
+
+        #Make a place to put our mozconfig
         mozconfig_path = os.path.join(self.confDir, 'config-default')
         if os.path.exists(mozconfig_path):
             os.unlink(mozconfig_path)
 
+        #Using external mozconfig
         if self.mozconf:
+            #Copy their mozconfig, but use our own objdir param
+            #Also cores. Don't break the flag's functionality!
             shutil.copy(self.mozconf,mozconfig_path)
             f=open(mozconfig_path, 'a')
             f.write('mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg\n')
@@ -170,17 +174,17 @@ class Builder():
             os.environ['MOZCONFIG']=mozconfig_path
             return
 
-
+        #Using our custom mozconfig
         f=open(mozconfig_path, 'w')
-        #Ensure we know where to find our built stuff by using a custom mozconfig
         f.write('mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ff-dbg\n')
+
+        #According to Jesse, these are the fastest (build-wise) options
         f.write('ac_add_options --disable-optimize\n')
         f.write('ac_add_options --enable-debug\n')
         f.write('ac_add_options --enable-tests\n')
 
-        #HACK :/
         if sys.platform == "win32" or sys.platform == "cygwin":
-            print "Windows detected, compiling with 1 core."
+            print "Windows detected, multicore support disabled. Compiling with 1 core..."
             f.write("ac_add_options --with-windows-version=600\n")
             f.write("ac_add_options --enable-application=browser\n")
         else:
@@ -193,13 +197,12 @@ class Builder():
         os.environ['MOZCONFIG']=mozconfig_path
 
     def importAndBisect(self, good, bad, testcondition=None, args_for_condition=[]):
-        #convenience function for API use only
+        #Convenience function for API use only
         conditionscript = ximport.importRelativeOrAbsolute(testcondition)
         self.bisect(good,bad, testcondition=conditionscript, args_for_condition=args_for_condition)
 
     def bisect(self,good,bad, testcondition=None, args_for_condition=[]):
         #Call hg bisect with initial params, set up building environment (mozconfig)
-        #testfile is an external file, testpath is an actual mochitest
 
         #Support for using dates
         badDate = re.search(r'(\d\d\d\d-\d\d-\d\d)',good)
@@ -214,12 +217,16 @@ class Builder():
                 print "Invalid date range."
                 quit()
 
+            #Since they entered dates, lets give them info about the changeset range
             print "Bisecting on changeset range " + str(good)[:12] + " to " + str(bad)[:12]
             quit()
 
+        #Get the actual changesets that we will be using
         good = hgId(good, self.hgPrefix)
         bad = hgId(bad, self.hgPrefix)
-        if good and bad and self.validate(good, bad): #valid commit numbers, do the bisection!
+
+        if good and bad and self.validate(good, bad):
+            #Valid changesets, so do the bisection
             subprocess.call(self.hgPrefix+["bisect","--reset"])
 
             setUpdate = captureStdout(self.hgPrefix+["up",bad])
@@ -233,8 +240,9 @@ class Builder():
             self.check_done(setGood)
 
             # Set mozconfig
-            # Call recursive bisection!
             self.mozconfigure()
+
+            # Call recursive bisection!
             self.bisectRecurse(testcondition=testcondition, args_for_condition=args_for_condition)
 
         else:
@@ -310,9 +318,6 @@ class Builder():
 
         if retval.startswith("Testing changeset"):
             print "\n"
-        else:
-            print "Something went wrong! :("
-            quit()
 
         self.bisectRecurse(testcondition=testcondition, args_for_condition=args_for_condition)
 
@@ -436,8 +441,13 @@ def cli():
     group1.add_option("-j", "--cores", dest="cores", default=cpuCount(),
                                         help="Max simultaneous make jobs (default: %default, the number of cores on this system)",
                                         metavar="[numjobs]")
+    group1.add_option("-m", "--mozconfig", dest="mozconf",
+                                        help="external mozconfig if so desired",
+                                        metavar="[mozconf path]", default=False)
+
     group1.add_option("-f", "--freshtrunk", action = "store_true", dest="makeClean", default=False,
                                         help="Delete old trunk and use a fresh one")
+
 
     group2 = OptionGroup(parser, "Bisector Options",
                                         "These are options for bisecting on changesets. Dates are retrieved from pushlog " \
@@ -457,7 +467,7 @@ def cli():
                                         metavar="[changeset]")
 
     group3.add_option("-e", "--run", action="store_true", dest="run", default=False,
-                                        help="run the current build -- only works if already built")
+                                        help="run a single changeset")
 
     group4 = OptionGroup(parser, "Binary building options",
                                         "These are options for building binaries from a single changeset")
@@ -480,13 +490,10 @@ def cli():
                                         "Caution: use these options at your own risk.  "
                                         "They aren't recommended.")
 
-    group6.add_option("-r", "--repo", dest="repoURL",
+    group6.add_option("-R", "--repo", dest="repoURL",
                                         help="alternative mercurial repo to bisect NOTE: NEVER BEEN TESTED",
                                         metavar="valid repository url")
 
-    group6.add_option("-m", "--mozconfig", dest="mozconf",
-                                        help="external mozconfig if so desired NOTE: BROKEN RIGHT NOW",
-                                        metavar="path_to_mozconfig", default=False)
 
     parser.add_option_group(group1)
     parser.add_option_group(group2)
@@ -540,8 +547,6 @@ def cli():
         if options.repoURL:
             commitBuilder.repoURL = options.repoURL
             print "Using alternative repository "+options.repoURL
-        #if options.alternateMake:
-        #    commitBuilder.makeCommand = shlex.split(options.alternateMake)
 
         conditionscript = None
         if options.condition:

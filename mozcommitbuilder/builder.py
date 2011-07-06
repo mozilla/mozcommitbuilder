@@ -109,7 +109,7 @@ class Builder():
 
     def changesetFromDay(self, date, oldest=True):
         # Gets first changeset from a given date via pushlog
-        nextDate = self.increment_day(date)
+        nextDate = increment_day(date)
         pushlog_url = "http://hg.mozilla.org/mozilla-central/json-pushes?startdate="+date+"&enddate="+nextDate
         pushlog_json = simplejson.load(urllib.urlopen(pushlog_url))
         sorted_keys = sorted(map(int,pushlog_json.keys()))

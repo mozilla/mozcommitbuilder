@@ -219,7 +219,6 @@ class Builder():
 
             #Since they entered dates, lets give them info about the changeset range
             print "Bisecting on changeset range " + str(good)[:12] + " to " + str(bad)[:12]
-            quit()
 
         #Get the actual changesets that we will be using
         good = hgId(good, self.hgPrefix)

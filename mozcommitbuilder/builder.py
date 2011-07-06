@@ -43,20 +43,16 @@ Known Issues:
     1) Multi-core compilation on Windows not supported
     2) Won't work on Windows 2000 or windows where home directory
        has spaces -- if we use ~ the build command will fail.
-
-Current Goals:
-    1) Get
 '''
 
 from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
 from mozrunner import Runner, FirefoxRunner
-from mozrunner import FirefoxProfile
 import simplejson, urllib
 import ximport
-
 from types import *
 from utils import hgId, captureStdout
 import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil, datetime, multiprocessing
+from time import gmtime, strftime
 
 #Global Variables
 showMakeData = 0
@@ -208,8 +204,6 @@ class Builder():
         conditionscript = ximport.importRelativeOrAbsolute(testcondition)
         self.bisect(good,bad, testcondition=conditionscript, args_for_condition=args_for_condition)
 
-
-
     def bisect(self,good,bad, testcondition=None, args_for_condition=[]):
         #Call hg bisect with initial params, set up building environment (mozconfig)
         #testfile is an external file, testpath is an actual mochitest
@@ -224,6 +218,13 @@ class Builder():
             good = self.changesetFromDay(goodDate) #Get first changeset from this day
             bad = self.changesetFromDay(badDate, oldest=False) #Get last changeset from that day
 
+            if not (bad and good):
+                print "Invalid date range."
+                quit()
+
+            print "Bisecting on changeset range " + str(good)[:12] + " to " + str(bad)[:12]
+            quit()
+
         good = hgId(good, self.hgPrefix)
         bad = hgId(bad, self.hgPrefix)
         if good and bad and self.validate(good, bad): #valid commit numbers, do the bisection!
@@ -237,16 +238,7 @@ class Builder():
             print str(setBad)
             print str(setGood)
 
-            # Check if we should terminate early because the bisector exited?
-            string_to_parse = str(setGood)
-            traceback_flag = string_to_parse.find("--extend")
-            if traceback_flag > -1:
-                #hg 1.9 and up only has --extend, which is branch aware
-                print "Using hg 1.9, we're branch aware! Let's explore that ancestor branch..."
-                subprocess.call(self.hgPrefix+["bisect","--extend"])
-            traceback_flag = string_to_parse.find("The first bad revision is")
-            if traceback_flag > -1:
-                quit()
+            self.check_done(setGood)
 
             # Set mozconfig
             # Call recursive bisection!
@@ -256,6 +248,23 @@ class Builder():
         else:
             print "Invalid values. Please check your changeset revision numbers."
 
+
+    def check_done(self, doneString):
+       # Check if we should terminate early because the bisector exited?
+        string_to_parse = str(doneString)
+        traceback_flag = string_to_parse.find("Not all ancestors")
+        
+        traceback_flag = string_to_parse.find("--extend")
+        if traceback_flag > -1:
+            #hg 1.9 and up only has --extend, which is branch aware
+            print "Using hg 1.9, we're branch aware! Let's explore that ancestor branch..."
+            subprocess.call(self.hgPrefix+["bisect","--extend"])
+        traceback_flag = string_to_parse.find("The first")
+        if traceback_flag > -1:
+            print "Regression found using mozcommitbuilder " + progVersion + " on " + sys.platform + " at " + strftime("%Y-%m-%d %H:%M:%S", gmtime())
+            quit()
+
+
     def bisectRecurse(self, testcondition=None, args_for_condition=[]):
         #Recursively build, run, and prompt
         verdict = ""
@@ -263,6 +272,7 @@ class Builder():
         try:
             self.build()
         except Exception:
+            print "This build failed!"
             verdict = "skip"
 
         if verdict == "skip":
@@ -299,16 +309,22 @@ class Builder():
         print " ".join(verdictCommand)
         retval = captureStdout(verdictCommand)
 
-        print str(retval)
         string_to_parse = str(retval)
-        traceback_flag = string_to_parse.find("Not all ancestors")
-        if traceback_flag > -1:
+        print string_to_parse
+
+        branch_aware_flag = string_to_parse.find("Not all ancestors")
+        bisect_extend_flag = string_to_parse.find("--extend")
+        if bisect_extend_flag > -1:
+            #hg 1.9 and up only has --extend, which is branch aware
+            print "Using hg 1.9, we're branch aware! Let's explore that ancestor branch..."
+            subprocess.call(self.hgPrefix+["bisect","--extend"])
+        elif branch_aware_flag > -1:
             print "You need to re-run the bisector again using the changeset they give you."
 
-        # HACK
-        if retval[1] == 'h': #if retval starts with "the" then we can quit
+        if retval.startswith("The first"):
+
             quit()
-        elif retval[1] == 'e': #if retval starts with "testing" then it needs to keep going
+        elif retval.startswith("Testing changeset"):
             print "\n"
         else:
             print "Something went wrong! :("
@@ -472,7 +488,6 @@ def cli():
                                         "Options for using an automated test instead of interactive prompting for bisection. " \
                                         "Please read documentation on how to write testing functions for this script.")
 
-
     group5.add_option("-c", "--condition", dest="condition", default=None, metavar="[condtest.py -opt1 -opt2]",
                                         help="External condition for bisecting. " \
                                              "Note: THIS MUST BE THE LAST OPTION CALLED.")
@@ -544,6 +559,7 @@ def cli():
         #if options.alternateMake:
         #    commitBuilder.makeCommand = shlex.split(options.alternateMake)
 
+        conditionscript = None
         if options.condition:
             conditionscript = ximport.importRelativeOrAbsolute(options.condition)
 

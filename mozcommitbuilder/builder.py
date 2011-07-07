@@ -478,7 +478,7 @@ def cli():
     group4.add_option("-q", "--revision", dest="revision", default=None, metavar="[changeset]",
                                         help="revision number for single changeset to build binary from")
 
-    group5 = OptionGroup(parser, "Automatic Testing Options (EXPERIMENTAL)",
+    group5 = OptionGroup(parser, "Automatic Testing Options",
                                         "Options for using an automated test instead of interactive prompting for bisection. " \
                                         "Please read documentation on how to write testing functions for this script.")
 
@@ -523,19 +523,13 @@ def cli():
         commitBuilder.cores = options.cores
         commitBuilder.mozconfigure()
 
-    # TODO: Allow a user to build a binary from cli
-    if options.binary:
-        pass
-        #if options.revision:
-        #    pass
-        #else:
-        #    print "You need to specify a revision to build the binary from."
-
     # For building single commits:
     if options.single:
         if options.run:
             commitBuilder.buildAndRun(changeset=options.single)
             print "Firefox successfully built and ran!"
+        elif options.binary:
+            commitBuilder.getBinary(revision=options.single)
         else:
             commitBuilder.build(changeset=options.single)
             print "Local trunk built. Not running."

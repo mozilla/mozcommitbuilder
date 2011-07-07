@@ -45,21 +45,34 @@ Known Issues:
        has spaces -- if we use ~ the build command will fail.
 '''
 
-from optparse import OptionParser, OptionGroup #note: deprecated in Python27, use argparse
 from mozrunner import Runner, FirefoxRunner
-import simplejson, urllib
-import ximport
-from types import *
-from utils import hgId, captureStdout, increment_day
-import os, sys, subprocess, string, re, tempfile, shlex, glob, shutil, datetime, multiprocessing
+from optparse import OptionParser, OptionGroup
 from time import gmtime, strftime
+from types import *
+from utils import hgId, captureStdout, increment_day, cpuCount
+import datetime
+import glob
+import multiprocessing
+import os
+import re
+import shlex
+import shutil
+import simplejson
+import string
+import subprocess
+import sys
+import tempfile
+import urllib
+import ximport
 
 #Global Variables
 showMakeData = 0
-progVersion="0.4.5"
+progVersion="0.4.6"
 
 class Builder():
-    def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False, mozconf=None):
+    def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"),
+                 "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False,
+                 mozconf=None):
         #Set variables that we need
         self.makeCommand = makeCommand
         self.shellCacheDir = shellCacheDir
@@ -422,11 +435,7 @@ class Builder():
             return False
         return True
 
-def cpuCount():
-    try:
-        return multiprocessing.cpu_count()
-    except NotImplementedError:
-        return 1
+
 
 def cli():
     #Command line interface

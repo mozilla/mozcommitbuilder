@@ -41,6 +41,13 @@ import datetime
 import platform
 import os
 import subprocess
+import multiprocessing
+
+def cpuCount():
+    try:
+        return multiprocessing.cpu_count()
+    except NotImplementedError:
+        return 1
 
 def increment_day(date):
     #TODO: MOVE TO UTILS. Increments a date string.

@@ -467,6 +467,9 @@ def cli():
     group2.add_option("-b", "--bad", dest="bad",
                                         help="Broken commit revision",
                                         metavar="[changeset or date]")
+    group2.add_option("-r", "--remote", dest="remote",
+                                        help="Build remotely instead of locally",
+                                        metavar="")
 
     group3 = OptionGroup(parser, "Single Changeset Options",
                                         "These are options for building a single changeset")
@@ -547,6 +550,7 @@ def cli():
     elif options.good and options.bad:
         print "Begin interactive commit bisect!\n"
 
+
         if options.repoURL:
             commitBuilder.repoURL = options.repoURL
             print "Using alternative repository "+options.repoURL
@@ -554,6 +558,10 @@ def cli():
         conditionscript = None
         if options.condition:
             conditionscript = ximport.importRelativeOrAbsolute(options.condition)
+
+        if options.remote:
+            #Build remotely!
+
         commitBuilder.bisect(options.good,options.bad, testcondition=conditionscript, args_for_condition=args_for_condition)
 
     # Should not get here.

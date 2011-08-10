@@ -45,11 +45,13 @@ Known Issues:
        has spaces -- if we use ~ the build command will fail.
 '''
 
+from mozInstall import MozInstaller
 from mozrunner import Runner, FirefoxRunner
 from optparse import OptionParser, OptionGroup
 from time import gmtime, strftime
 from types import *
-from utils import hgId, captureStdout, increment_day, cpuCount
+from utils import hgId, captureStdout, increment_day, cpuCount, getTestUrl, download_url, unzip, url_base
+from trybuild import BuildCaller
 import datetime
 import glob
 import multiprocessing
@@ -67,28 +69,37 @@ import ximport
 
 #Global Variables
 showMakeData = 0
-progVersion="0.4.6"
+progVersion="0.4.7"
 
 class Builder():
     def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"),
                  "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False,
-                 mozconf=None):
+                 mozconf=None, tryhost=None, tryport=None, remote=False, tryPusher=False, testBinaries=False):
         #Set variables that we need
         self.makeCommand = makeCommand
         self.shellCacheDir = shellCacheDir
+        self.testDir = os.path.join(shellCacheDir,"tests")
         self.cores = cores
         self.repoURL = repoURL
         self.confDir = os.path.join(shellCacheDir, "mozconf")
+        self.binaryDir = os.path.join(shellCacheDir, "binaries")
         self.repoPath = os.path.join(shellCacheDir,"mozbuild-trunk")
         self.hgPrefix = ['hg', '-R', self.repoPath]
         self.mozconf = mozconf
         self.objdir = os.path.join(self.repoPath,"obj-ff-dbg")
+        self.tryhost = tryhost
+        self.tryport = tryport
+        self.testBinaries = testBinaries
+        self.remote = remote
+        self.tryPusher = tryPusher
 
         #Create directories we need
         if not os.path.exists(shellCacheDir):
             os.mkdir(shellCacheDir)
         if not os.path.exists(self.confDir):
             os.mkdir(self.confDir)
+        if not os.path.exists(self.binaryDir):
+            os.mkdir(self.binaryDir)
 
         #Sanity check: make sure hg is installed on the system, otherwise do not proceed!
         try:
@@ -201,7 +212,7 @@ class Builder():
             f.write("ac_add_options --with-windows-version=600\n")
             f.write("ac_add_options --enable-application=browser\n")
         else:
-            print "Compiling with "+str(self.cores)+ " cores.\n"
+            print "Configured to run with "+str(self.cores)+ " cores.\n"
             f.write('mk_add_options MOZ_MAKE_FLAGS="-s -j '+str(self.cores)+'"')
 
         f.close()
@@ -214,10 +225,16 @@ class Builder():
         conditionscript = ximport.importRelativeOrAbsolute(testcondition)
         self.bisect(good,bad, testcondition=conditionscript, args_for_condition=args_for_condition)
 
+    def setupTests(self):
+        zippedTests = download_url(getTestUrl(),dest=str(os.path.join(self.shellCacheDir,"tests.zip")))
+        unzip(self.testDir,zippedTests)
+
     def bisect(self,good,bad, testcondition=None, args_for_condition=[]):
         #Call hg bisect with initial params, set up building environment (mozconfig)
-
         #Support for using dates
+        if self.testBinaries:
+            self.setupTests()
+
         badDate = re.search(r'(\d\d\d\d-\d\d-\d\d)',good)
         goodDate = re.search(r'(\d\d\d\d-\d\d-\d\d)',bad)
         if badDate != None and goodDate != None:
@@ -261,7 +278,6 @@ class Builder():
             print "Invalid values. Please check your changeset revision numbers."
             print "If the problem persists, try running mozcommitbuilder with the -f flag."
 
-
     def check_done(self, doneString):
        # Check if we should terminate early because the bisector exited?
         string_to_parse = str(doneString)
@@ -283,32 +299,113 @@ class Builder():
     def bisectRecurse(self, testcondition=None, args_for_condition=[]):
         #Recursively build, run, and prompt
         verdict = ""
+        current_revision = captureStdout(self.hgPrefix+["id","-i"])
 
-        try:
-            self.build()
-        except Exception:
-            print "This build failed!"
-            verdict = "skip"
+        if self.remote:
+            print "on current revision "+current_revision
+            print "This would ask for a remote changeset, but it's not implemented yet."
+            #TODO:
+            #Remote bisection!
+            #Step 1. Check if revision is in the archive
+            #Step 2. If revision is not in the archive, set remote=False and continue (it will build and bisect that revision)
+            #if not check_archived:
+            #    set remote false and continue
+            #else:
+            #Step 3. If the revision is in the archive, download it and its corresponding tests
+                #STEP3
+                #1. Extract tests into some directory
+                #2. Extract Nightly.app into "tests"
+                #MozInstaller(src=, dest="", dest_app="Nightly.app")
+                #3. run the following:
+                #test_command = ['python', 'mochitest/runtests.py', '--appname=./Nightly.app/Contents/MacOS/firefox-bin', '--utility-path=bin', '--extra-profile-file=bin/plugins', '--certificate-path=certs', '--autorun', '--close-when-done', '--console-level=INFO', '--test-path=test_name']
+                #output = captureStdout(test_command, ignoreStderr=True)
+                #set verdict based on output
+                #python mochitest/runtests.py --appname=./Nightly.app/Contents/MacOS/firefox-bin --utility-path=bin --extra-profile-file=bin/plugins --certificate-path=certs --autorun --close-when-done --console-level=INFO --test-path=test_name
 
-        if verdict == "skip":
-            pass
-        elif testcondition==None:
-            #Not using a test, interactive bisect begin!
-            self.run()
+                #example test name: Harness_sanity/test_sanityException.html
+                #Step 4. Run and run test to get verdict
+                #Step 5. Set verdict
+
+        elif self.tryPusher:
+            try:
+                caller = BuildCaller(host=self.tryhost, port=int(self.tryport), data=current_revision)
+                print "Getting revision "+current_revision+"..."
+            except:
+                print "Failed to connect to trypusher. Make sure your settings are correct and that the trypusher server was started."
+                exit()
+            response = caller.getChangeset()
+            print "Waiting on Mozilla Pulse for revision " + response + "..."
+            url = caller.getURLResponse(response)
+            print "the base is " +url_base(url)
+            #Download it here
+            #1. Download from url, extract to same place as tests
+            #2. Run test or start browser.
+            binary_path =  os.path.join(self.binaryDir,url_base(url))
+            downloaded_binary = download_url(url, dest=str(binary_path))
+            MozInstaller(src=str(binary_path), dest=str(self.testDir), dest_app="Nightly.app")
+            #now nightly is installed in
+            if sys.platform == "darwin":
+                binary_path = os.path.join(self.testDir,"Nightly.app")
+                runner = FirefoxRunner(binary=os.path.join(binary_path,"Contents","MacOS")+"/firefox-bin")
+            elif sys.platform == "linux2":
+                binary_path = os.path.join(self.testDir,"firefox")
+                runner = FirefoxRunner(binary=binary_path)
+            elif sys.platform == "win32" or sys.platform == "cygwin":
+                binary_path = os.path.join(self.testDir,"firefox.exe")
+                runner = FirefoxRunner(binary=binary_path)
+            else:
+                print "Your platform is not currently supported."
+                quit()
+
+            dest = runner.start()
+            if not dest:
+                print "Failed to start the downloaded binary"
+                verdict == "skip"
+            runner.wait()
+            if verdict == "skip":
+                pass
+            elif testcondition!=None:
+                #Support condition scripts where arg0 is the directory with the binary and tests
+                args_to_pass = [self.testDir] + args_for_condition
+
+                if hasattr(testcondition, "init"):
+                    testcondition.init(args_to_pass)
+
+                #TODO: refactor to use directories with revision numbers
+                #8.2.11 - revision number can now be found in current_revision variable
+                tmpdir = tempfile.mkdtemp()
+                verdict = testcondition.interesting(args_to_pass,tmpdir)
+
+                #Allow user to return true/false or bad/good
+                if verdict != "bad" and verdict != "good":
+                    verdict = "bad" if verdict else "good"
         else:
-            #Using Jesse's idea: import any testing script and run it as the truth condition
-            args_to_pass = [self.objdir] + args_for_condition
+            try:
+                self.build()
+            except Exception:
+                print "This build failed!"
+                verdict = "skip"
 
-            if hasattr(testcondition, "init"):
-                testcondition.init(args_to_pass)
+            if verdict == "skip":
+                pass
+            elif testcondition==None:
+                #Not using a test, interactive bisect begin!
+                self.run()
+            else:
+                #Using Jesse's idea: import any testing script and run it as the truth condition
+                args_to_pass = [self.objdir] + args_for_condition
 
-            #TODO: refactor to use directories with revision numbers
-            tmpdir = tempfile.mkdtemp()
-            verdict = testcondition.interesting(args_to_pass,tmpdir)
+                if hasattr(testcondition, "init"):
+                    testcondition.init(args_to_pass)
 
-            #Allow user to return true/false or bad/good
-            if verdict != "bad" and verdict != "good":
-                verdict = "bad" if verdict else "good"
+                #TODO: refactor to use directories with revision numbers
+                #8.2.11 - revision number can now be found in current_revision variable
+                tmpdir = tempfile.mkdtemp()
+                verdict = testcondition.interesting(args_to_pass,tmpdir)
+
+                #Allow user to return true/false or bad/good
+                if verdict != "bad" and verdict != "good":
+                    verdict = "bad" if verdict else "good"
 
         while verdict not in ["good", "bad", "skip"]:
             verdict = raw_input("Was this commit good or bad? (type 'good', 'bad', or 'skip'): ")
@@ -435,8 +532,6 @@ class Builder():
             return False
         return True
 
-
-
 def cli():
     #Command line interface
     usage = """usage: %prog --good=[changeset] --bad=[changeset] [options] \n       %prog --single=[changeset] -e
@@ -467,9 +562,6 @@ def cli():
     group2.add_option("-b", "--bad", dest="bad",
                                         help="Broken commit revision",
                                         metavar="[changeset or date]")
-    group2.add_option("-r", "--remote", dest="remote",
-                                        help="Build remotely instead of locally",
-                                        metavar="")
 
     group3 = OptionGroup(parser, "Single Changeset Options",
                                         "These are options for building a single changeset")
@@ -498,11 +590,29 @@ def cli():
                                         help="External condition for bisecting. " \
                                              "Note: THIS MUST BE THE LAST OPTION CALLED.")
 
-    group6 = OptionGroup(parser, "Broken and Unstable Options",
+    group6 = OptionGroup(parser, "Remote Options",
+                                        "If you don't have a build environment you can push to tryserver to build. Warning: not recommended -- very very slow. Uses a trypusher server (see http://github.com/samliu/moztrypusher). Another option here is to use mozilla's remote build cache to avoid a lot of building. Warning: breaks support for the automated test.")
+    group6.add_option("-t", "--try", action="store_true", dest="trypusher",
+                                        help="Build remotely with trypusher",
+                                        default=False)
+
+    group6.add_option("-n", "--host",dest="tryhost", metavar="[trypusher server hostname]",
+                                        help="Trypusher host",
+                                        default="localhost")
+
+    group6.add_option("-p", "--port", dest="tryport", metavar="[trypusher server port]",
+                                        help="Trypusher Port",
+                                        default=8080)
+
+    group2.add_option("-r", "--remote", action="store_true", dest="remote",
+                                        help="Use remote build cache to avoid extra builds (NOT YET WORKING)",
+                                        default=False)
+
+    group7 = OptionGroup(parser, "Broken and Unstable Options",
                                         "Caution: use these options at your own risk.  "
                                         "They aren't recommended.")
 
-    group6.add_option("-R", "--repo", dest="repoURL",
+    group7.add_option("-R", "--repo", dest="repoURL",
                                         help="alternative mercurial repo to bisect NOTE: NEVER BEEN TESTED",
                                         metavar="valid repository url")
 
@@ -513,6 +623,7 @@ def cli():
     parser.add_option_group(group4)
     parser.add_option_group(group5)
     parser.add_option_group(group6)
+    parser.add_option_group(group7)
     (options, args_for_condition) = parser.parse_args()
 
     # If a user only wants to make clean or has supplied no options:
@@ -530,7 +641,7 @@ def cli():
 
     # Set up a trunk for either bisection or build.
     mozConfiguration = options.mozconf
-    commitBuilder = Builder(clean=options.makeClean, mozconf=mozConfiguration)
+    commitBuilder = Builder(clean=options.makeClean, mozconf=mozConfiguration, tryhost=options.tryhost, tryport=options.tryport, remote=options.remote, tryPusher=options.trypusher)
     if options.cores:
         commitBuilder.cores = options.cores
         commitBuilder.mozconfigure()
@@ -561,6 +672,7 @@ def cli():
 
         if options.remote:
             #Build remotely!
+            pass
 
         commitBuilder.bisect(options.good,options.bad, testcondition=conditionscript, args_for_condition=args_for_condition)
 

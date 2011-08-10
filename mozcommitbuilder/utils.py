@@ -42,6 +42,8 @@ import platform
 import os
 import subprocess
 import multiprocessing
+from BeautifulSoup import BeautifulSoup
+import zipfile
 
 def cpuCount():
     try:
@@ -132,6 +134,7 @@ def strsplit(string, sep):
     return strlist
 
 def download_url(url, dest=None):
+    print "Downloading "+ url+"..."
     h = httplib2.Http()
     resp, content = h.request(url, "GET")
     if dest == None:
@@ -140,6 +143,7 @@ def download_url(url, dest=None):
     local = open(dest, 'wb')
     local.write(content)
     local.close()
+    print "Downloaded!"
     return dest
 
 def get_date(dateString):
@@ -149,3 +153,58 @@ def get_date(dateString):
         print "Incorrect date format"
         return
     return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+
+def urlLinks(url):
+    res = [] # do not return a generator but an array, so we can store it for later use
+
+    h = httplib2.Http();
+    resp, content = h.request(url, "GET")
+    if resp.status != 200:
+        return res
+
+    soup = BeautifulSoup(content)
+    for link in soup.findAll('a'):
+        res.append(link)
+    return res
+
+def getTestUrl():
+    platform=get_platform()
+    buildregex = None
+    binary = None
+    if platform['name'] == "Windows":
+        if platform['bits'] == '64':
+            print "64 bit Windows not supported."
+            sys.exit()
+        buildRegex = ".*win32.tests.zip"
+    elif platform['name'] == "Linux":
+        if platform['bits'] == '64':
+            buildRegex = ".*linux-x86_64.tests.zip"
+        else:
+            buildRegex = ".*linux-i686.tests.zip"
+    elif platform['name'] == "Mac":
+        buildRegex = ".*mac.tests.zip"
+
+
+    url = "http://ftp.mozilla.org/pub/mozilla.org/firefox/nightly/latest-trunk/"
+    for link in urlLinks(url):
+        href = link.get("href")
+        if re.match(buildRegex, href):
+            return url + href
+
+    return False
+
+def unzip(dest, src):
+    zipped = zipfile.ZipFile(src)
+    print "Unzipping file..."
+    try:
+        zipped.extractall(dest)
+    except:
+        args = ["unzip", "-o", "-q", "-d", dest, src]
+        proc = subprocess.Popen(args)
+        proc.wait()
+    print "Successfully unzipped file!"
+
+def url_base(url):
+    items = url.split("/")
+    return items[-1]

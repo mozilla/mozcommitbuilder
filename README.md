@@ -136,6 +136,8 @@ Options:
     -j [numjobs], --cores=[numjobs]
                         Max simultaneous make jobs (default: 8, the number of
                         cores on this system)
+    -m [mozconf path], --mozconfig=[mozconf path]
+                        external mozconfig if so desired
     -f, --freshtrunk    Delete old trunk and use a fresh one
 
   Bisector Options:
@@ -146,13 +148,14 @@ Options:
                         Last known good revision
     -b [changeset or date], --bad=[changeset or date]
                         Broken commit revision
+    -r, --remote        Build remotely instead of locally
 
   Single Changeset Options:
     These are options for building a single changeset
 
     -s [changeset], --single=[changeset]
                         Build a single changeset
-    -e, --run           run the current build -- only works if already built
+    -e, --run           run a single changeset
 
   Binary building options:
     These are options for building binaries from a single changeset
@@ -162,7 +165,7 @@ Options:
                         revision number for single changeset to build binary
                         from
 
-  Automatic Testing Options (EXPERIMENTAL):
+  Automatic Testing Options:
     Options for using an automated test instead of interactive prompting
     for bisection. Please read documentation on how to write testing
     functions for this script.
@@ -171,13 +174,21 @@ Options:
                         External condition for bisecting. Note: THIS MUST BE
                         THE LAST OPTION CALLED.
 
+  TryServer Options:
+    If you don't have a build environment you can push to tryserver to
+    build. Warning: not recommended -- very very slow. Uses a trypusher
+    server (see http://github.com/samliu/moztrypusher)
+
+    -t, --try           Build remotely with trypusher
+    -n [trypusher server hostname], --host=[trypusher server hostname]
+                        Trypusher host
+    -p [trypusher server port], --port=[trypusher server port]
+                        Trypusher Port
+
   Broken and Unstable Options:
     Caution: use these options at your own risk.  They aren't recommended.
 
-    -r valid repository url, --repo=valid repository url
+    -R valid repository url, --repo=valid repository url
                         alternative mercurial repo to bisect NOTE: NEVER BEEN
                         TESTED
-    -m path_to_mozconfig, --mozconfig=path_to_mozconfig
-                        external mozconfig if so desired NOTE: BROKEN RIGHT
-                        NOW
 ```

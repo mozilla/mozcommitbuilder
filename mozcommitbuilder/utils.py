@@ -86,7 +86,7 @@ def captureStdout(cmd, ignoreStderr=False, combineStderr=False, ignoreExitCode=F
             print stderr
         # Pymake in builds earlier than revision 232553f741a0 did not support the '-s' option.
         if 'no such option: -s' not in stdout:
-            raise Exception('Nonzero exit code')
+            raise Exception('Nonzero exit code from %s' % repr(cmd))
     if not combineStderr and not ignoreStderr and len(stderr) > 0:
         print 'Unexpected output on stderr from ' + repr(cmd)
         print stdout, stderr

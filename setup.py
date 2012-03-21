@@ -1,12 +1,12 @@
 from setuptools import setup, find_packages
 
-deps = ['pulsebuildmonitor',
+deps = ['pulsebuildmonitor >= 0.6',
         'mozrunner >= 2.5.4',
         'httplib2 >= 0.6.0',
         'simplejson']
 
 setup(name='mozcommitbuilder',
-      version='0.4.8',
+      version='0.4.9',
       description ="""Regression finder using Mozilla central repo""",
       author="Sam Liu",
       author_email="sam@ambushnetworks.com",

@@ -59,7 +59,12 @@ import os
 import re
 import shlex
 import shutil
-import simplejson
+
+try:
+    import json
+except:
+    import simplejson
+
 import string
 import subprocess
 import sys

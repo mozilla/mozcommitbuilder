@@ -61,7 +61,7 @@ import shlex
 import shutil
 
 try:
-    import json
+    import json as simplejson
 except:
     import simplejson
 
@@ -79,7 +79,9 @@ progVersion="0.4.7"
 class Builder():
     def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"),
                  "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False,
-                 mozconf=None, tryhost=None, tryport=None, remote=False, tryPusher=False, testBinaries=False):
+                 mozconf=None, tryhost=None, tryport=None, remote=False, tryPusher=False,
+                 testBinaries=False):
+
         #Set variables that we need
         self.makeCommand = makeCommand
         self.shellCacheDir = shellCacheDir
@@ -105,6 +107,9 @@ class Builder():
             os.mkdir(self.confDir)
         if not os.path.exists(self.binaryDir):
             os.mkdir(self.binaryDir)
+
+
+        #Gets or updates our cached repo for building
 
         #Sanity check: make sure hg is installed on the system, otherwise do not proceed!
         try:
@@ -557,6 +562,9 @@ def cli():
     group1.add_option("-f", "--freshtrunk", action = "store_true", dest="makeClean", default=False,
                                         help="Delete old trunk and use a fresh one")
 
+    group1.add_option("-d", "--deletetrunk", action = "store_true", dest="deleteTrunk", default=False,
+                                        help="Cleanup Flag: deletes the temp directory / trunk generated. Do not use with other flags, this is just for convenient cleanup.")
+
 
     group2 = OptionGroup(parser, "Bisector Options",
                                         "These are options for bisecting on changesets. Dates are retrieved from pushlog " \
@@ -631,6 +639,15 @@ def cli():
     parser.add_option_group(group7)
     (options, args_for_condition) = parser.parse_args()
 
+    # Cleanup flag
+    if options.deleteTrunk:
+        print "Performing cleanup..."
+        try:
+            shutil.rmtree(self.repoPath)
+            quit()
+        except:
+            quit()
+
     # If a user only wants to make clean or has supplied no options:
     if (not options.good or not options.bad) and not options.single:
         if options.makeClean:
@@ -647,6 +664,7 @@ def cli():
     # Set up a trunk for either bisection or build.
     mozConfiguration = options.mozconf
     commitBuilder = Builder(clean=options.makeClean, mozconf=mozConfiguration, tryhost=options.tryhost, tryport=options.tryport, remote=options.remote, tryPusher=options.trypusher)
+
     if options.cores:
         commitBuilder.cores = options.cores
         commitBuilder.mozconfigure()

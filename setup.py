@@ -6,7 +6,7 @@ deps = ['pulsebuildmonitor >= 0.6',
         'simplejson']
 
 setup(name='mozcommitbuilder',
-      version='0.4.9',
+      version='0.4.10',
       description ="""Regression finder using Mozilla central repo""",
       author="Sam Liu",
       author_email="sam@ambushnetworks.com",

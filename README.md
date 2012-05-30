@@ -23,6 +23,13 @@ mozcommitbuilder is available on pypi, so you can install it with easy_install o
 #changesets (you can use the full changeset hash or short numerical id)
 mozcommitbuilder -g 70168 -b 70180
 ```
+
+```python
+#This example shows that you can use dateranges to similarly bisect
+#on changesets.
+mozcommitbuilder --good=2012-05-29 --bad=2012-05-30
+```
+
 ```python
 #If you are on OSX or Linux, this will compile with 8 cores. Multi-core
 #compiliation on windows doesn't work, the parameter will be ignored.
@@ -40,7 +47,6 @@ mozcommitbuilder -f --single=70168 -j 8
 #revision 70168 with 8 cores, then start firefox on completion.
 mozcommitbuilder -f -e --single=70168 -j 8
 ```
-
 
 ## Condition Scripts
 
@@ -139,6 +145,9 @@ Options:
     -m [mozconf path], --mozconfig=[mozconf path]
                         external mozconfig if so desired
     -f, --freshtrunk    Delete old trunk and use a fresh one
+    -d, --deletetrunk   Cleanup Flag: deletes the temp directory / trunk
+                        generated. Do not use with other flags, this is just
+                        for convenient cleanup.
 
   Bisector Options:
     These are options for bisecting on changesets. Dates are retrieved
@@ -148,7 +157,8 @@ Options:
                         Last known good revision
     -b [changeset or date], --bad=[changeset or date]
                         Broken commit revision
-    -r, --remote        Build remotely instead of locally
+    -r, --remote        Use remote build cache to avoid extra builds (NOT YET
+                        WORKING)
 
   Single Changeset Options:
     These are options for building a single changeset
@@ -174,10 +184,12 @@ Options:
                         External condition for bisecting. Note: THIS MUST BE
                         THE LAST OPTION CALLED.
 
-  TryServer Options:
+  Remote Options:
     If you don't have a build environment you can push to tryserver to
     build. Warning: not recommended -- very very slow. Uses a trypusher
-    server (see http://github.com/samliu/moztrypusher)
+    server (see http://github.com/samliu/moztrypusher). Another option
+    here is to use mozilla's remote build cache to avoid a lot of
+    building. Warning: breaks support for the automated test.
 
     -t, --try           Build remotely with trypusher
     -n [trypusher server hostname], --host=[trypusher server hostname]

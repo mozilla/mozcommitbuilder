@@ -74,13 +74,13 @@ import ximport
 
 #Global Variables
 showMakeData = 0
-progVersion="0.4.7"
+progVersion="0.4.10"
 
 class Builder():
     def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"),
                  "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False,
                  mozconf=None, tryhost=None, tryport=None, remote=False, tryPusher=False,
-                 testBinaries=False):
+                 testBinaries=False, deleteTrunk=False):
 
         #Set variables that we need
         self.makeCommand = makeCommand
@@ -99,6 +99,17 @@ class Builder():
         self.testBinaries = testBinaries
         self.remote = remote
         self.tryPusher = tryPusher
+
+        # Cleanup flag
+        if deleteTrunk:
+            print "Performing cleanup..."
+            try:
+                shutil.rmtree(self.shellCacheDir)
+                print "Cleaned up!"
+                quit()
+            except:
+                quit()
+
 
         #Create directories we need
         if not os.path.exists(shellCacheDir):
@@ -639,17 +650,8 @@ def cli():
     parser.add_option_group(group7)
     (options, args_for_condition) = parser.parse_args()
 
-    # Cleanup flag
-    if options.deleteTrunk:
-        print "Performing cleanup..."
-        try:
-            shutil.rmtree(self.repoPath)
-            quit()
-        except:
-            quit()
-
     # If a user only wants to make clean or has supplied no options:
-    if (not options.good or not options.bad) and not options.single:
+    if (not options.good or not options.bad) and not options.single and not options.deleteTrunk:
         if options.makeClean:
             #Make a clean trunk and quit.
             commitBuilder = Builder(clean=options.makeClean)
@@ -663,7 +665,7 @@ def cli():
 
     # Set up a trunk for either bisection or build.
     mozConfiguration = options.mozconf
-    commitBuilder = Builder(clean=options.makeClean, mozconf=mozConfiguration, tryhost=options.tryhost, tryport=options.tryport, remote=options.remote, tryPusher=options.trypusher)
+    commitBuilder = Builder(clean=options.makeClean, mozconf=mozConfiguration, tryhost=options.tryhost, tryport=options.tryport, remote=options.remote, tryPusher=options.trypusher, deleteTrunk=options.deleteTrunk)
 
     if options.cores:
         commitBuilder.cores = options.cores

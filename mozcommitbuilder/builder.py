@@ -367,13 +367,13 @@ class Builder():
             #now nightly is installed in
             if sys.platform == "darwin":
                 binary_path = os.path.join(self.testDir,"Nightly.app")
-                runner = FirefoxRunner(binary=os.path.join(binary_path,"Contents","MacOS")+"/firefox-bin")
+                runner = FirefoxRunner.create(binary=os.path.join(binary_path,"Contents","MacOS")+"/firefox-bin")
             elif sys.platform == "linux2":
                 binary_path = os.path.join(self.testDir,"firefox")
-                runner = FirefoxRunner(binary=binary_path)
+                runner = FirefoxRunner.create(binary=binary_path)
             elif sys.platform == "win32" or sys.platform == "cygwin":
                 binary_path = os.path.join(self.testDir,"firefox.exe")
-                runner = FirefoxRunner(binary=binary_path)
+                runner = FirefoxRunner.create(binary=binary_path)
             else:
                 print "Your platform is not currently supported."
                 quit()
@@ -479,15 +479,15 @@ class Builder():
     def run(self):
         #Run the built binary if it exists. ONLY WORKS IF BUILD WAS CALLED!
         if sys.platform == "darwin":
-            runner = FirefoxRunner(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","NightlyDebug.app","Contents","MacOS")+"/firefox-bin")
+            runner = FirefoxRunner.create(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","NightlyDebug.app","Contents","MacOS")+"/firefox-bin")
             runner.start()
             runner.wait()
         elif sys.platform == "linux2":
-            runner = FirefoxRunner(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox")
+            runner = FirefoxRunner.create(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox")
             runner.start()
             runner.wait()
         elif sys.platform == "win32" or sys.platform == "cygwin":
-            runner = FirefoxRunner(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox.exe")
+            runner = FirefoxRunner.create(binary=os.path.join(self.shellCacheDir,"mozbuild-trunk","obj-ff-dbg","dist","bin") + "/firefox.exe")
             runner.start()
             runner.wait()
         else:

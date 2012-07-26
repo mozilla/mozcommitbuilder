@@ -125,13 +125,6 @@ def get_platform():
 
     return {'name': name, 'version': version, 'bits': bits, 'cpu': cpu}
 
-
-def strsplit(string, sep):
-    strlist = string.split(sep)
-    if len(strlist) == 1 and strlist[0] == '': # python's split function is ridiculous
-      return []
-    return strlist
-
 def download_url(url, dest=None):
     print "Downloading "+ url+"..."
     h = httplib2.Http()

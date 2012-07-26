@@ -52,7 +52,6 @@ def cpuCount():
         return 1
 
 def increment_day(date):
-    #TODO: MOVE TO UTILS. Increments a date string.
     s = date.split("-")
     delta = datetime.timedelta(days=1)
     nextDate = datetime.date(int(s[0]),int(s[1]),int(s[2])) + delta

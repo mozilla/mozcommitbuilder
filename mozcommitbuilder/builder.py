@@ -77,14 +77,22 @@ showMakeData = 0
 progVersion="0.4.10"
 
 class Builder():
-    def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=os.path.join(os.path.expanduser("~"),
-                 "moz-commitbuilder-cache"), cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False,
+    def __init__(self, makeCommand=["make","-f","client.mk","build"] , shellCacheDir=None,
+                 cores=1, repoURL="http://hg.mozilla.org/mozilla-central",clean=False,
                  mozconf=None, tryhost=None, tryport=None, remote=False, tryPusher=False,
                  testBinaries=False, deleteTrunk=False):
 
         #Set variables that we need
         self.makeCommand = makeCommand
+
+        # Default to ~/.moz-commitbuilder-cache if ~/moz-commitbuilder-cache doesn't exist.
+        if not shellCacheDir:
+            shellCacheDir = os.path.join(os.path.expanduser("~"), "moz-commitbuilder-cache")
+            if not os.path.isdir(shellCacheDir):
+                shellCacheDir = os.path.join(os.path.expanduser("~"), ".moz-commitbuilder-cache")
+
         self.shellCacheDir = shellCacheDir
+
         self.testDir = os.path.join(shellCacheDir,"tests")
         self.cores = cores
         self.repoURL = repoURL
